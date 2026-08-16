@@ -1,0 +1,61 @@
+name: Refresh futures snapshots and deploy Pages
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Beijing day/night trading windows, weekdays: refresh public quotes every 5 minutes.
+    - cron: "*/5 0-7,13-15 * * 1-5"
+    # Recompute four-framework strategies every 30 minutes while the market is active.
+    - cron: "2,32 1-3,5-6,13-15 * * 1-5"
+    # Beijing 00:20, Tuesday-Saturday: rebuild all technical/fundamental snapshots in maintenance hours.
+    - cron: "20 16 * * 1-5"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build 77-product snapshots
+        if: github.event_name != 'schedule' || github.event.schedule == '20 16 * * 1-5'
+        env:
+          ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
+        run: python scripts/build_all.py --workers 8
+
+      - name: Recompute intraday strategies
+        if: github.event_name == 'schedule' && github.event.schedule == '2,32 1-3,5-6,13-15 * * 1-5'
+        env:
+          ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
+        run: python scripts/build_all.py --workers 8 --skip-fundamentals
+
+      - name: Refresh live quotes
+        if: github.event_name == 'schedule' && github.event.schedule == '*/5 0-7,13-15 * * 1-5'
+        env:
+          ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
+        run: python scripts/refresh_quotes.py
+      - name: Verify static output
+        run: python scripts/verify_site.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
