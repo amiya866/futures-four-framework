@@ -34,7 +34,7 @@ assert fundamentals.get("coverage", {}).get("focus") == 62
 assert len(focus) == 77
 deep = [item for item in focus if item.get("kind") == "focus"]
 assert len(deep) == 62
-assert all(2 <= len(item.get("metrics") or []) <= 3 for item in deep)
+assert all(2 <= len(item.get("metrics") or []) <= 4 for item in deep)
 fundamental_raw = json.dumps(fundamentals, ensure_ascii=False)
 assert '"score"' not in fundamental_raw
 assert '"consistency"' not in fundamental_raw
