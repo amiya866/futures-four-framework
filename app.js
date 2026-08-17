@@ -1,3 +1,4 @@
+/* build 20260817b: 详情页整合版(renderPremium/renderCrossInsight/缩放/图题) */
 const NULL_EL={set textContent(v){},set innerHTML(v){},set className(v){},set href(v){},set value(v){},classList:{add(){},remove(){},toggle(){},contains:()=>false},addEventListener(){},style:{},querySelector(){return null},querySelectorAll(){return[]}};
 const $ = id => document.getElementById(id) || NULL_EL;
 const state = {market:null, products:[], fundamentals:{}, seats:{}, essays:{}, crossInsight:{}, premium:{}, equity:{}, newsItems:[], filtered:[], sector:'全部', view:'cards', detail:null, frame:'D', strategyFrame:'D', chartViews:{}, seasonViews:{}};
