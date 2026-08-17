@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "xyz.abysstrades.app",
+      "sha256_cert_fingerprints": [
+        "08:3B:E8:45:2F:4F:D8:DE:D3:04:0A:72:79:DB:92:E7:CB:FB:FC:D0:53:D9:35:B9:A5:33:2E:E7:CC:56:31:87"
+      ]
+    }
+  }
+]
