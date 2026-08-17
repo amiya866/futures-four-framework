@@ -52,7 +52,8 @@ for name in ("app-icon-192.png", "app-icon-512.png", "apple-touch-icon.png", "fa
 assert "hour < 8" in (SITE / "auth.js").read_text(encoding="utf-8")
 assert (SITE / "robots.txt").read_text(encoding="utf-8").strip().endswith("Noindex: /")
 macro = json.loads((SITE / "data" / "macro.json").read_text(encoding="utf-8"))
-assert macro.get("event", {}).get("title") == "美国7月CPI落地快报"
+ev = macro.get("event", {})
+assert ev.get("title") and ev.get("conclusion") and ev.get("stance"), "macro.json event 需含 title/conclusion/stance"
 for path in SITE.rglob("*"):
     if path.is_file() and path.suffix.lower() in {".html", ".js", ".css", ".json", ".md", ".txt"}:
         assert "wk_" not in path.read_text(encoding="utf-8", errors="ignore"), path
