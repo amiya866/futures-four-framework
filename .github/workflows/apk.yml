@@ -1,0 +1,43 @@
+name: Build Android APK (TWA via Bubblewrap)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Node + Bubblewrap
+        run: |
+          node -v
+          npm install -g @bubblewrap/cli
+      - name: Init TWA project
+        run: |
+          mkdir -p twa && cd twa
+          yes "" | bubblewrap init --manifest https://abysstrades.xyz/manifest.webmanifest --directory app 2>&1 | tail -20 || true
+          ls -la app || true
+      - name: Build APK
+        run: |
+          cd twa/app
+          bubblewrap build --skipPwaValidation 2>&1 | tail -30
+          find . -name "*.apk" -o -name "*.aab" | head
+      - name: Show signing fingerprint
+        run: |
+          cd twa/app 2>/dev/null || cd twa
+          K=$(find . -name "*.keystore" | head -1)
+          echo "keystore: $K"
+          if [ -n "$K" ]; then keytool -list -v -keystore "$K" -storepass android 2>/dev/null | grep -A2 "SHA256:" | head -4; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yuanxing-apk
+          path: |
+            twa/**/*.apk
+            twa/**/*.aab
+            twa/**/*.keystore

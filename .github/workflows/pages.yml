@@ -3,12 +3,9 @@ name: Refresh futures snapshots and deploy Pages
 on:
   workflow_dispatch:
   schedule:
-    # Beijing day/night trading windows, weekdays: refresh public quotes every 5 minutes.
-    - cron: "*/5 0-7,13-15 * * 1-5"
-    # Recompute four-framework strategies every 30 minutes while the market is active.
-    - cron: "2,32 1-3,5-6,13-15 * * 1-5"
-    # Beijing 00:20, Tuesday-Saturday: rebuild all technical/fundamental snapshots in maintenance hours.
-    - cron: "20 16 * * 1-5"
+    # 2026-08-17 用户改: 纯价格15分钟 / 供需与策略每天16:30北京(08:30UTC)一次
+    - cron: "*/15 0-7,13-15 * * 1-5"
+    - cron: "30 8 * * *"
   push:
     branches: [main]
 
@@ -34,26 +31,20 @@ jobs:
         with:
           python-version: "3.12"
       - name: Build 77-product snapshots
-        if: github.event_name != 'schedule' || github.event.schedule == '20 16 * * 1-5'
+        if: github.event_name != 'schedule' || github.event.schedule == '30 8 * * *'
         env:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/build_all.py --workers 8
 
-      - name: Recompute intraday strategies
-        if: github.event_name == 'schedule' && github.event.schedule == '2,32 1-3,5-6,13-15 * * 1-5'
-        env:
-          ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
-        run: python scripts/build_all.py --workers 8 --skip-fundamentals
-
       - name: Refresh live quotes
-        if: github.event_name == 'schedule' && github.event.schedule == '*/5 0-7,13-15 * * 1-5'
+        if: github.event_name == 'schedule' && github.event.schedule == '*/15 0-7,13-15 * * 1-5'
         env:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/refresh_quotes.py
       - name: Verify static output
         run: python scripts/verify_site.py
       - name: Commit rebuilt data snapshots back to repo
-        if: github.event_name != 'schedule' || github.event.schedule == '20 16 * * 1-5'
+        if: github.event_name != 'schedule' || github.event.schedule == '30 8 * * *'
         continue-on-error: true
         run: |
           git config user.name "ff-actions"
