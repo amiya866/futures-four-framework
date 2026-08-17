@@ -96,13 +96,14 @@ return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${axis}${s}</svg
 function renderFundamental(symbol){const card=$('fundamentalCard'),f=state.fundamentals[String(symbol).toUpperCase()];if(!f?.covered){card.classList.add('hidden');return}card.classList.remove('hidden');const link=$('fundamentalLink');
 $('fundamentalTitle').textContent='供需主要矛盾';$('fundamentalThesis').innerHTML=(f.contradiction||f.summary||'')+(f.marginal_focus?'<div class=mf>短线边际：'+f.marginal_focus+'</div>':'');
 let rows='',series=null,unit='';
+let head=null;
 if(f.kind==='market_snapshot'){const inv=f.inventory||{},sp=f.spread||{};
 const move=inv.latest==null?'未匹配到可靠库存口径':inv.stale?'库存数据滞后':`${inv.comparison} ${inv.change_pct>0?'↑':inv.change_pct<0?'↓':'→'}${fmt(Math.abs(inv.change_pct),1)}%`;
 rows=`<div class="fundamental-metric"><div><b>${inv.name||'库存'}</b><small>${inv.source||'知几·料'} · ${inv.end||'—'}</small></div><span>${inv.latest==null?'—':`${fmt(inv.latest)} ${inv.unit||''}`}<small>${move}</small></span></div>`
 +`<div class="fundamental-metric"><div><b>主力－下一活跃</b><small>${sp.near_symbol||'—'} / ${sp.far_symbol||'—'}</small></div><span class="${sp.value>0?'tone-up':sp.value<0?'tone-down':'tone-neutral'}">${sp.value==null?'—':signed(sp.value)}<small>${sp.structure||sp.status||'月差待更新'}</small></span></div>`;
 series=inv.series;unit=inv.unit;link.classList.add('hidden')}
 else{rows=(f.metrics||[]).slice(0,4).map(m=>{const move=m.change_pct==null?'读取失败':m.stale?'数据滞后':`${m.comparison} ${m.change_pct>0?'↑':m.change_pct<0?'↓':'→'}${fmt(Math.abs(m.change_pct),1)}%`;return`<div class="fundamental-metric"><div><b>${m.name}</b><small>${m.why}</small></div><span>${fmt(m.latest)} ${m.unit}<small>${move} · ${m.end||'—'}</small></span></div>`}).join('');
-const ms=(f.metrics||[]).filter(m=>m.series&&m.series.length>=20);const head=ms.find(m=>m.id===f.chart_id)||ms[0];series=head?.series;unit=head?.unit;link.href=f.library_url;link.classList.remove('hidden')}
+const ms=(f.metrics||[]).filter(m=>m.series&&m.series.length>=20);head=ms.find(m=>m.id===f.chart_id)||ms[0];series=head?.series;unit=head?.unit;link.href=f.library_url;link.classList.remove('hidden')}
 $('fundamentalMetrics').innerHTML=rows;
 const _ft=head?`<div class="fund-chart-title">${head.name} · 季节性[${head.source||''}] · 滚轮缩放/双击复位</div>`:'';$('fundChart').innerHTML=_ft+(seasonalSVG(series,unit,state.seasonViews[String(symbol).toUpperCase()])||'<div class="fund-nochart">该品种暂无足够历史序列出图</div>');
 const es=(state.essays[String(symbol).toUpperCase()]||[]).slice(0,2);const fold=$('essayFold');
