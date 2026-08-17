@@ -14,6 +14,12 @@ const localPos = {
 function useLocal() { return !account.online; }
 let _acctReadyResolve; const acctReady = new Promise(r => { _acctReadyResolve = r; });
 function posList() { return useLocal() ? localPos.load() : account.positions; }
+function floatPnlOf(p) {
+  if (!p.open) return p.pnl || 0;
+  const cur = (state.products.find(x => x.symbol === p.symbol) || {}).last;
+  return cur != null ? (p.side === 'long' ? 1 : -1) * (cur - p.price) * (p.lots || 1) : 0;
+}
+function totalPnl() { return posList().reduce((s, p) => s + floatPnlOf(p), 0); }
 const account = { token: localStorage.getItem('yafco_acct_token') || '', name: localStorage.getItem('yafco_acct_name') || '', positions: [], online: true };
 
 async function acctReq(path, body, auth) {
@@ -48,11 +54,11 @@ function renderAcct() {
   const pb = $('posBtn'); if (pb) pb.classList.toggle('hidden', !account.token && !useLocal());
   if (account.token) {
     const open = account.positions.filter(p => p.open).length;
-    const pnl = acctPnl();
+    const pnl = totalPnl();
     b.innerHTML = `${account.name} · 持仓${open} · 累计盈亏 <b class="${pnl >= 0 ? 'tone-up' : 'tone-down'}">${pnl >= 0 ? '+' : ''}${fmt(pnl, 0)}</b>`;
    } else if (useLocal()) {
     const list = localPos.load(), open = list.filter(p => p.open).length;
-    const pnl = list.filter(p => !p.open).reduce((s, p) => s + (p.pnl || 0), 0);
+    const pnl = list.reduce((s, p) => s + floatPnlOf(p), 0);
     b.innerHTML = `本地模式 · 持仓${open} · 累计盈亏 <b class="${pnl >= 0 ? 'tone-up' : 'tone-down'}">${pnl >= 0 ? '+' : ''}${fmt(pnl, 0)}</b>`;
   } else {
     b.textContent = account.online ? '登录 / 注册' : '账户离线';
@@ -142,7 +148,7 @@ function renderPosPanel() {
   if (!account.token && !useLocal()) { el.innerHTML = '<div class="pos-empty">登录后可使用模拟持仓</div>'; return; }
   if (!list.length) { el.innerHTML = '<div class="pos-empty">暂无持仓记录。在品种详情页可开模拟仓。</div>'; return; }
   el.innerHTML = list.slice(0, 30).map(p => {
-    const cur = (state.products.find(x => x.symbol === p.symbol) || {}).last;
+    const cur = (state.products.find(x => x.symbol === p.symbol || x.symbol === String(p.symbol).toUpperCase()) || {}).last;
     const floatPnl = p.open && cur ? (p.side === 'long' ? 1 : -1) * (cur - p.price) * p.lots : p.pnl;
     return `<div class="pos-row ${p.open ? '' : 'closed'}"><div><b>${p.symbol}</b><small>${p.side === 'long' ? '多' : '空'} ×${p.lots} · ${p.opened_at.slice(0, 10)}</small></div>
     <span>开 ${fmt(p.price)}${p.open ? (cur ? ` · 现 ${fmt(cur)}` : '') : ` · 平 ${fmt(p.close_price)}`}</span>
