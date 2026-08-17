@@ -20,9 +20,12 @@ jobs:
           npm install -g @bubblewrap/cli
       - name: Init TWA project
         run: |
-          mkdir -p twa && cd twa
-          yes "" | bubblewrap init --manifest https://abysstrades.xyz/manifest.webmanifest --directory app 2>&1 | tail -20 || true
-          ls -la app || true
+          mkdir -p ~/.bubblewrap twa
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > ~/.bubblewrap/config.json
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          cd twa
+          bubblewrap init --manifest https://abysstrades.xyz/manifest.webmanifest --directory app 2>&1 | tail -20
+          ls -la app
       - name: Build APK
         run: |
           cd twa/app
