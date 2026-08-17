@@ -24,7 +24,7 @@ jobs:
           printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > ~/.bubblewrap/config.json
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           cd twa
-          bubblewrap init --manifest https://abysstrades.xyz/manifest.webmanifest --directory app 2>&1 | tail -20
+          yes "" | bubblewrap init --manifest https://abysstrades.xyz/manifest.webmanifest --directory app 2>&1 | tail -20
           ls -la app
       - name: Build APK
         run: |
