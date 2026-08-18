@@ -7,42 +7,45 @@
 <link rel="icon" href="../assets/favicon-32.png">
 <script src="../assets/echarts.min.js"></script>
 <style>
-:root{--bg:#0a0e17;--card:#111827;--border:#1f2937;--text:#e5e7eb;--sub:#9ca3af;--blue:#3b82f6;--green:#10b981;--red:#ef4444;--yellow:#f59e0b}
+:root{--bg:#f4efe0;--card:#fdfbf3;--border:#b9c48a;--text:#3f3b2f;--sub:#8a8672;--blue:#5b8a3c;--green:#7a9b3d;--red:#c9443f;--yellow:#b8860b;--panel:#f3eedd}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
-.navbar{background:#0d1117;border-bottom:1px solid var(--border);padding:0 20px;position:sticky;top:0;z-index:100;display:flex;align-items:center;height:55px;gap:25px;overflow-x:auto}
+body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);font-size:14px;background-image:radial-gradient(#e8e2cb 1px,transparent 1px);background-size:22px 22px}
+.navbar{background:#fdfbf3;border-bottom:2px solid var(--border);padding:0 20px;position:sticky;top:0;z-index:100;display:flex;align-items:center;height:55px;gap:20px;overflow-x:auto}
 .logo{font-weight:bold;font-size:18px;color:var(--blue);white-space:nowrap;cursor:pointer}
-.nav-item{cursor:pointer;padding:6px 14px;border-radius:6px;white-space:nowrap}
-.nav-item:hover,.nav-item.active{background:#1a2234;color:var(--blue)}
+.nav-item{cursor:pointer;padding:6px 14px;border-radius:999px;white-space:nowrap;border:1.5px solid transparent}
+.nav-item:hover{border-color:var(--border);color:var(--blue)}
+.nav-item.active{background:var(--green);color:#fdfbf3;border-color:var(--green)}
 .nav-item a{color:inherit;text-decoration:none}
-.side-switch{display:inline-flex;border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-left:10px}
+.side-switch{display:inline-flex;border:2px solid var(--border);border-radius:999px;overflow:hidden;margin-left:8px;background:#fdfbf3}
 .side-switch a{padding:3px 12px;font-size:11px;color:var(--sub);text-decoration:none;cursor:pointer}
-.side-switch a.on{background:var(--blue);color:#fff;font-weight:700}
+.side-switch a.on{background:var(--green);color:#fdfbf3;font-weight:700}
 .main{max-width:1400px;margin:15px auto;padding:0 20px;display:grid;grid-template-columns:200px 1fr;gap:15px}
-.sidebar{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;height:fit-content;position:sticky;top:70px;max-height:calc(100vh - 90px);overflow-y:auto}
+.sidebar{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:12px;height:fit-content;position:sticky;top:70px;max-height:calc(100vh - 90px);overflow-y:auto}
 .sidebar-title{font-weight:bold;color:var(--yellow);margin-bottom:10px}
-.sector-item{padding:6px 8px;cursor:pointer;border-radius:5px;display:flex;justify-content:space-between;font-size:13px}
-.sector-item:hover{background:#1a2234}
-.sector-item.active{background:var(--blue);color:#fff}
+.sector-item{padding:6px 8px;cursor:pointer;border-radius:8px;display:flex;justify-content:space-between;font-size:13px;gap:6px}
+.sector-item:hover{background:var(--panel)}
+.sector-item.active{background:var(--green);color:#fdfbf3}
 .up{color:var(--red)}.down{color:var(--green)}
 .content{display:flex;flex-direction:column;gap:15px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:15px}
+.card{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:15px;box-shadow:2px 3px 0 rgba(122,155,61,.25)}
 .card-title{font-weight:bold;margin-bottom:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:15px}
-.metric{background:#1a2234;padding:12px;border-radius:8px;border:1px solid var(--border)}
+.metric{background:var(--panel);padding:12px;border-radius:12px;border:1.5px solid var(--border)}
 .metric-label{font-size:12px;color:var(--sub)}
 .metric-value{font-size:20px;font-weight:bold;margin:3px 0}
 .chart-box{width:100%;height:380px}
 .chart-tall{height:460px}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#1a2234;padding:8px;text-align:left;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap}
-td{padding:8px;border-bottom:1px solid var(--border);white-space:nowrap}
-tr:hover{background:#1a2234}
+th{background:var(--panel);padding:8px;text-align:left;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap}
+td{padding:8px;border-bottom:1px dashed #d8d2b8;white-space:nowrap}
+tr:hover{background:var(--panel)}
 tr.stock-row{cursor:pointer}
-button{background:var(--blue);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;margin:0 2px}
+button{background:var(--blue);color:#fdfbf3;border:none;padding:6px 14px;border-radius:999px;cursor:pointer;font-size:12px;margin:0 2px}
 button.active{background:var(--green)}
+select,input[type=text]{background:#fdfbf3;border:1.5px solid var(--border);border-radius:8px;padding:5px 8px;color:var(--text);font-size:12px}
 .hidden{display:none!important}
 .muted{color:var(--sub);font-size:12px}
+.hl{background:#e9f0d8;font-weight:700}
 @media (max-width:768px){.main{grid-template-columns:1fr}.sidebar{position:static;max-height:none}}
 </style>
 </head>
@@ -51,8 +54,8 @@ button.active{background:var(--green)}
   <div class="logo" onclick="location.href='../index.html'">📊 渊行</div><span class="side-switch"><a href="../index.html">期货</a><a class="on">股票</a></span>
   <div class="nav-item active" data-page="overview">市场总览</div>
   <div class="nav-item" data-page="stocks">个股分析</div>
-  <div class="nav-item"><a href="https://amiya866.github.io/yafco-tracker/" target="_blank">财报跟踪 ↗</a></div>
-  <div class="nav-item"><a href="../" target="_blank">期货四框架 ↗</a></div>
+  <div class="nav-item" data-page="financials">财报数据</div>
+  <div class="nav-item" data-page="research">研究观点</div>
   <div class="muted" id="updatedAt" style="margin-left:auto"></div>
 </nav>
 <div class="main">
@@ -72,6 +75,23 @@ button.active{background:var(--green)}
       <div class="chart-row card"><div class="card-title">📋 全池个股（点行看K线）</div>
         <table><thead><tr><th data-k="code">代码</th><th data-k="name">名称</th><th data-k="sec">板块</th><th data-k="price">现价</th><th data-k="chg">涨跌幅</th><th data-k="turnover">换手率</th><th data-k="vol_ratio">量比</th><th data-k="pe">PE</th></tr></thead><tbody id="allStockBody"></tbody></table>
       </div>
+    </div>
+    <div id="page-financials" class="hidden">
+      <div class="card"><div class="card-title">📊 业绩弹性测算（简化模型：Δ净利=Δ价×产量×(1-25%税)）</div>
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <span class="muted">公司</span><select id="elaCompany"></select>
+          <span class="muted" id="elaMeta"></span>
+        </div>
+        <table><thead><tr><th>品种价格(元/吨)</th><th>归母净利(亿)</th><th>PE(倍)</th><th>股息率</th></tr></thead><tbody id="elaBody"></tbody></table>
+        <div class="muted" style="margin-top:8px">⚠️ 一阶简化测算：价格变动全额落利润、产量=近四季实际、分红比例参考华泰口径；不含成本联动/套保/少数股东损益，仅作弹性排序参考。</div>
+      </div>
+      <div class="card"><div class="card-title">📋 公司产量数据库（财报跟踪平台口径）</div>
+        <div style="margin-bottom:8px"><input type="text" id="finSearch" placeholder="搜索公司/品种…"></div>
+        <div style="max-height:520px;overflow:auto"><table><thead><tr><th>品种</th><th>板块</th><th>公司</th><th>最新期</th><th>产量</th><th>同比</th><th>指引/备注</th></tr></thead><tbody id="finBody"></tbody></table></div>
+      </div>
+    </div>
+    <div id="page-research" class="hidden">
+      <div class="card"><div class="card-title">💬 研究观点 · 小作文聚合（知识星球）</div><div id="researchBody" style="font-size:13px;line-height:1.8"></div></div>
     </div>
     <div id="page-stocks" class="hidden">
       <div class="card"><div class="card-title"><span id="klineTitle">📈 选择个股</span>

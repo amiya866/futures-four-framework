@@ -11,8 +11,15 @@ async function boot() {
   catch (e) { state.essays = {}; }
   state.quotes = await r.json();
   $('updatedAt').textContent = '数据 ' + (state.quotes.updated_at || '').slice(5, 16) + ' · K线 ' + state.quotes.kline_ok + '只';
+  try { const f = await fetch('../data/stocks/financials.json?t=' + Date.now()); state.financials = (await f.json()).rows || []; }
+  catch (e) { state.financials = []; }
+  try { const e = await fetch('../data/stocks/elasticity.json?t=' + Date.now()); ELA = (await e.json()).items || []; } catch (e2) { ELA = []; }
+  try { const m = await fetch('../data/market.json?t=' + Date.now()); state.futPrice = {}; (m.products || []).forEach(x => { state.futPrice[x.symbol] = x.last; }); }
+  catch (e) { state.futPrice = {}; }
   renderSectors();
   renderOverview();
+  renderFinancials();
+  renderResearch();
   bindNav();
 }
 
@@ -20,8 +27,8 @@ function bindNav() {
   document.querySelectorAll('.nav-item[data-page]').forEach(el => el.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
     el.classList.add('active');
-    $('page-overview').classList.toggle('hidden', el.dataset.page !== 'overview');
-    $('page-stocks').classList.toggle('hidden', el.dataset.page !== 'stocks');
+    for (const pg of ['overview', 'stocks', 'financials', 'research'])
+      $('page-' + pg).classList.toggle('hidden', el.dataset.page !== pg);
     if (el.dataset.page === 'stocks') renderSectorStocks();
   }));
   document.querySelectorAll('[data-per]').forEach(b => b.addEventListener('click', () => {
@@ -73,7 +80,7 @@ function renderOverview() {
 }
 
 function stockRow(s) {
-  return `<tr class="stock-row" data-c="${s.code}"><td>${s.code.slice(2)}</td><td>${s.name}</td>` +
+  return `<tr class="stock-row" data-c="${s.code}" style="${s.has_kline === false ? 'opacity:.45' : ''}"><td>${s.code.slice(2)}</td><td>${s.name}${s.has_kline === false ? ' ⧗' : ''}</td>` +
     ('sec' in s ? `<td>${(s.sectors || []).map(x => SECTOR_NAMES[x] || x).join('/')}</td>` : '') +
     `<td>${fmtP(s.price)}</td><td class="${cls(s.chg)}">${s.chg != null ? (s.chg > 0 ? '+' : '') + s.chg + '%' : '—'}</td>` +
     `<td>${s.turnover ?? '—'}</td><td>${s.vol_ratio ?? '—'}</td><td>${s.pe != null ? Math.round(s.pe) : '—'}</td></tr>`;
@@ -109,7 +116,13 @@ function renderSectorStocks() {
 
 async function loadKline(code) {
   const r = await fetch('../data/stocks/kline/' + code + '.json?t=' + Date.now());
-  if (!r.ok) return;
+  if (!r.ok) {
+    state.kline = null;
+    $('klineTitle').textContent = '⚠️ ' + code.slice(2) + ' 暂无K线数据（停牌/退市/接口缺失）';
+    echarts.init($('klineChart')).clear();
+    echarts.init($('indicatorChart')).clear();
+    return;
+  }
   state.kline = await r.json();
   state.stock = code;
   $('klineTitle').textContent = '📈 ' + state.kline.name + ' ' + code.slice(2);
@@ -180,3 +193,55 @@ function renderKline() {
 }
 
 boot().catch(e => { $('updatedAt').textContent = '数据加载失败: ' + e.message; });
+
+/* ===== 财报数据 + 业绩弹性 ===== */
+let ELA = [];  // 来自 data/stocks/elasticity.json
+function renderFinancials() {
+  // 公司产量表
+  const rows = state.financials || [];
+  const draw = list => {
+    $('finBody').innerHTML = list.slice(0, 400).map(r =>
+      `<tr><td>${r.commodity}</td><td>${r.section || ''}</td><td>${r.name}</td><td>${r.period || '—'}</td>` +
+      `<td>${r.value != null ? r.value + r.unit : '—'}${r.est ? '<span class="muted">(拟合)</span>' : ''}</td>` +
+      `<td class="${cls(r.yoy)}">${r.yoy != null ? (r.yoy * 100).toFixed(1) + '%' : '—'}</td>` +
+      `<td class="muted">${(r.guide ? '指引' + r.guide : '') + (r.note || '')}</td></tr>`).join('');
+  };
+  draw(rows);
+  $('finSearch').addEventListener('input', e => {
+    const q = e.target.value.trim();
+    draw(q ? rows.filter(r => (r.name + r.commodity + (r.section || '')).includes(q)) : rows);
+  });
+  // 业绩弹性
+  const sel = $('elaCompany');
+  sel.innerHTML = ELA.map((c, i) => `<option value="${i}">${c.name}</option>`).join('');
+  const drawEla = () => {
+    const c = ELA[+sel.value];
+    
+    const mc = c.mktcap || 0;
+    const baseProfit = c.pe ? mc / c.pe : null;
+    const pref = (state.futPrice || {})[c.symbol] || 24000;
+    $('elaMeta').textContent = `市值 ${mc || '—'}亿 · PE ${c.pe ?? '—'} · 基准价 ${pref}元/吨 · ${c.note || ''}`;
+    let html = '';
+    const range = {AL:[20000,29000,500],CU:[90000,120000,2500],ZN:[20000,30000,1000],SN:[300000,500000,10000],LC:[60000,180000,10000]}[c.symbol] || [20000,29000,500];
+    for (let P = range[0]; P <= range[1]; P += range[2]) {
+      const profit = baseProfit != null ? baseProfit + (P - pref) * c.vol_wt * 0.75 / 10000 : null;
+      const pe = profit && profit > 0 ? mc / profit : null;
+      const dy = profit ? profit * c.div / mc * 100 : null;
+      html += `<tr class="${P === Math.round(pref / 500) * 500 ? 'hl' : ''}"><td>${P.toLocaleString()}</td>` +
+        `<td>${profit != null ? profit.toFixed(1) : '—'}</td><td>${pe ? pe.toFixed(1) + 'x' : '—'}</td>` +
+        `<td>${dy ? dy.toFixed(1) + '%' : '—'}</td></tr>`;
+    }
+    $('elaBody').innerHTML = html;
+  };
+  sel.addEventListener('change', drawEla);
+  drawEla();
+}
+function renderResearch() {
+  const es = state.essays || {};
+  const all = [];
+  for (const [sym, list] of Object.entries(es)) list.forEach(x => all.push({...x, sym}));
+  all.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  $('researchBody').innerHTML = all.length ? all.slice(0, 30).map(x =>
+    `<div style="padding:8px 0;border-bottom:1px dashed #d8d2b8"><small class="muted">${x.date} · ${SECTOR_NAMES[x.sym] || x.sym} · ${x.source || '知识星球'}</small><div><b>${x.title}</b></div><div class="muted">${(x.summary || '').slice(0, 90)} <a href="${x.url}" target="_blank" style="color:var(--blue)">全文 ↗</a></div></div>`).join('')
+    : '<div class="muted">暂无</div>';
+}

@@ -102,6 +102,19 @@ def main() -> None:
             }
         time.sleep(0.8)
 
+    # 市值/PE 缺失回补(XD日等 ulist 缺字段): 单票接口 f116=总市值 f164=PE(TTM)
+    for c in codes:
+        if quotes.get(c, {}).get("mktcap") is None or quotes.get(c, {}).get("pe") is None:
+            d = fetch(f"https://push2.eastmoney.com/api/qt/stock/get?secid={secid(c)}&fields=f43,f116,f164,f84,f85")
+            dd = (d or {}).get("data") or {}
+            if dd.get("f116"):
+                q = quotes.setdefault(c, {})
+                if q.get("mktcap") is None:
+                    q["mktcap"] = dd.get("f116")
+                if q.get("pe") is None and dd.get("f164"):
+                    q["pe"] = round(dd["f164"] / 100, 2)
+            time.sleep(0.3)
+
     # 指数
     indices = {}
     for sec, name in (("1.000001", "上证指数"), ("0.399001", "深证成指"), ("0.399006", "创业板指")):
@@ -138,6 +151,9 @@ def main() -> None:
             ok += 1
         time.sleep(0.35)
 
+    kdir = OUT / "kline"
+    for c in codes:
+        pool[c]["has_kline"] = (kdir / f"{c}.json").exists()
     payload = {
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "indices": indices,
@@ -150,7 +166,113 @@ def main() -> None:
     }
     payload["stocks"] = [{**s, "sectors": s["sectors"]} for s in payload["stocks"]]
     (OUT / "quotes.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    build_financials()
+    build_elasticity(quotes)
     print(f"[stocks] quotes={len(quotes)} kline={ok}/{len(codes)}")
+
+
+def build_financials() -> None:
+    """从财报跟踪平台 data.js 抽取各公司最新季度产量 → data/stocks/financials.json"""
+    import re as _re
+    src = Path(r"D:\拷贝文件\E\永安\财报跟踪平台\data\data.js")
+    if not src.exists():
+        print("[stocks] financials: tracker data.js 不存在, 跳过")
+        return
+    raw = src.read_text(encoding="utf-8")
+    d = json.loads(raw.split("=", 1)[1].strip().rstrip(";"))
+    rows = []
+    for c in d.get("commodities") or []:
+        for sec in c.get("sections") or []:
+            unit = sec.get("unit") or ""
+            for comp in sec.get("companies") or []:
+                data = comp.get("data") or {}
+                qkeys = sorted(k for k in data if "Q" in str(k))
+                latest_q, latest_v = (qkeys[-1], data[qkeys[-1]]) if qkeys else (None, None)
+                rows.append({
+                    "commodity": c.get("name"), "section": sec.get("title"),
+                    "name": comp.get("name"), "country": comp.get("country"),
+                    "period": latest_q, "value": latest_v, "unit": unit,
+                    "yoy": (comp.get("yoy") or {}).get(latest_q) if latest_q else None,
+                    "guide": comp.get("guide") or comp.get("guide2026"),
+                    "note": comp.get("note") or "",
+                    "est": bool((comp.get("est_q") or {}).get(latest_q)) if latest_q else False,
+                })
+    out = {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "rows": rows}
+    (OUT / "financials.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"[stocks] financials: {len(rows)} 公司行")
+
+
+
+
+
+
+
+
+
+
+# 业绩弹性目标清单: (代码, 公司, 品种symbol, 板块关键词, 分红比, 口径备注)
+ELA_TARGETS = [
+    ("sh601600", "中国铝业", "AL", "电解铝", 0.35, ""),
+    ("sz000807", "云铝股份", "AL", "电解铝", 0.40, ""),
+    ("sz000933", "神火股份", "AL", "电解铝", 0.40, ""),
+    ("sz002532", "天山铝业", "AL", "电解铝", 0.55, ""),
+    ("sz000960", "云南锡业", "SN", "精炼锡", 0.30, "自给率约28%"),
+    ("sh600301", "华锡有色", "SN", "矿产锡", 0.25, "矿山口径"),
+    ("sz000426", "兴业银锡", "SN", "矿产锡", 0.20, "银漫矿山"),
+    ("sh600497", "驰宏锌锗", "ZN", "锌", 0.30, "矿冶一体"),
+    ("sz002460", "赣锋锂业", "LC", "锂盐", 0.10, ""),
+    ("sz002466", "天齐锂业", "LC", "锂盐", 0.10, ""),
+    ("sh600362", "江西铜业", "CU", "铜", 0.30, "含冶炼量,弹性系统性高估"),
+    ("sz000630", "铜陵有色", "CU", "铜", 0.25, "含冶炼量,弹性系统性高估"),
+]
+def build_elasticity(quotes: dict) -> None:
+    """近4季产量加总(或单季×4年化) + 市值/PE → data/stocks/elasticity.json"""
+    import re as _re
+    src = Path(r"D:\拷贝文件\E\永安\财报跟踪平台\data\data.js")
+    if not src.exists():
+        return
+    d = json.loads(src.read_text(encoding="utf-8").split("=", 1)[1].strip().rstrip(";"))
+    out = []
+    for code, name, sym, sec_kw, div, note in ELA_TARGETS:
+        vol = None
+        for c in d.get("commodities") or []:
+            for sec in c.get("sections") or []:
+                if sec_kw not in (sec.get("title") or ""):
+                    continue
+                for comp in sec.get("companies") or []:
+                    if comp.get("name") != name:
+                        continue
+                    data = comp.get("data") or {}
+                    qs = sorted((k, v) for k, v in data.items() if "Q" in str(k) and isinstance(v, (int, float)))
+                    if len(qs) >= 4:
+                        vol = sum(v for _, v in qs[-4:])
+                    elif qs:
+                        vol = qs[-1][1] * 4
+                    else:
+                        ys = sorted((k, v) for k, v in data.items() if "Q" not in str(k) and isinstance(v, (int, float)))
+                        if ys:
+                            vol = ys[-1][1]  # 年度值
+                    unit = sec.get("unit") or ""
+        if vol is None:
+            continue
+        q = quotes.get(code) or {}
+        if not q.get("mktcap") or not q.get("pe"):
+            d2 = fetch(f"https://push2.eastmoney.com/api/qt/stock/get?secid={secid(code)}&fields=f116,f164")
+            dd2 = (d2 or {}).get("data") or {}
+            if dd2.get("f116"):
+                q["mktcap"] = dd2["f116"]
+            if dd2.get("f164") and not q.get("pe"):
+                q["pe"] = round(dd2["f164"] / 100, 2)
+        mc = (q.get("mktcap") or 0) / 1e8
+        out.append({
+            "code": code, "name": name, "symbol": sym, "div": div, "note": note,
+            "vol_wt": round(vol / 10000, 1) if unit == "吨" else round(vol, 1),
+            "unit": unit, "mktcap": round(mc, 0), "pe": q.get("pe"),
+        })
+    (OUT / "elasticity.json").write_text(json.dumps(
+        {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "items": out},
+        ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    print(f"[stocks] elasticity: {len(out)} 公司")
 
 
 if __name__ == "__main__":
