@@ -53,7 +53,7 @@ jobs:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/refresh_quotes.py
       - name: Build A-share stocks snapshot
-        if: github.event_name != 'schedule' || github.event.schedule == '30 8 * * *'
+        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * *'
         continue-on-error: true
         run: python scripts/build_stocks.py
       - name: Verify static output
