@@ -457,17 +457,25 @@ def build(workers: int) -> dict[str, Any]:
                 key_watch = "累库能否止步" if dir_txt == "累库" else ("去库能否延续" if dir_txt == "去库" else "库存方向选择")
                 auto_contra = (f"{inventory.get('name','库存')}{dir_txt}（{inventory.get('comparison','')} "
                                f"{chg:+.1f}%），月差{struct}；关键看{key_watch}。（自动初判）")
+            _ds = "ready" if (inventory_ok or spread_ok) else "observe"
             output_products.append({
                 "symbol": symbol, "name": product.get("name"), "covered": inventory_ok or spread_ok,
                 "kind": "market_snapshot", "summary": "库存验证现货松紧；主力－下一活跃合约验证期限结构。",
                 "inventory": inventory, "spread": spread,
                 "contradiction": CONTRADICTIONS.get(symbol) or auto_contra, "metrics": [], "library_url": LIBRARY,
                 "survey": SURVEY_NOTES.get(symbol),
+                "maturity": "draft", "decision_status": _ds,
+                "quality": {"decision_status": _ds},
+                "falsifier": "库存与月差方向反转即证伪",
             })
             continue
+        _falsifier = (config.get("marginal_focus") or "主逻辑反转").split("|")[0]
         output_products.append({
             "symbol": symbol, "name": product.get("name"), "covered": True,
             "kind": "focus",
+            "maturity": "deep", "decision_status": "ready",
+            "quality": {"decision_status": "ready"},
+            "falsifier": _falsifier,
             "contradiction": CONTRADICTIONS.get(symbol) or config["contradiction"],
             "marginal_focus": config.get("marginal_focus"),
             "metrics": [results[item[0]] for item in config["metrics"]],
@@ -480,7 +488,7 @@ def build(workers: int) -> dict[str, Any]:
         "schema_version": 3,  # 2026-08-18: verify_site 门禁口径
         "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "source": "知几·料（SMM/Mysteel 镜像）",
-        "coverage": {"total": len(output_products), "covered": sum(bool(item.get("covered")) for item in output_products), "focus": len(FOCUS)},
+        "coverage": {"total": len(output_products), "covered": sum(bool(item.get("covered")) for item in output_products), "focus": len(FOCUS), "ready": sum(1 for item in output_products if item.get("decision_status") == "ready"), "observe": sum(1 for item in output_products if item.get("decision_status") == "observe"), "blocked": 0},
         "products": output_products,
     }
     raw = json.dumps(payload, ensure_ascii=False, allow_nan=False)
