@@ -470,15 +470,23 @@ def build(workers: int) -> dict[str, Any]:
             })
             continue
         _falsifier = (config.get("marginal_focus") or "主逻辑反转").split("|")[0]
+        _metrics = []
+        for item in config["metrics"]:
+            _m = results[item[0]]
+            _m.setdefault("role", "synchronous")
+            _m.setdefault("mapping_quality", "exact")
+            _metrics.append(_m)
+        _all_ok = all(m.get("status") == "ok" and not m.get("stale") for m in _metrics)
+        _ds = "ready" if _all_ok else "observe"
         output_products.append({
             "symbol": symbol, "name": product.get("name"), "covered": True,
             "kind": "focus",
-            "maturity": "deep", "decision_status": "ready",
-            "quality": {"decision_status": "ready"},
+            "maturity": "deep", "decision_status": _ds,
+            "quality": {"decision_status": _ds},
             "falsifier": _falsifier,
             "contradiction": CONTRADICTIONS.get(symbol) or config["contradiction"],
             "marginal_focus": config.get("marginal_focus"),
-            "metrics": [results[item[0]] for item in config["metrics"]],
+            "metrics": _metrics,
             "survey": SURVEY_NOTES.get(symbol),
             "chart_id": CHART_PICK.get(symbol),
             "library_url": f"{LIBRARY}#/c/{config['route']}",
