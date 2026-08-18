@@ -25,6 +25,68 @@ API = "https://zhiji-ai.xyz/commodity/api"
 LIBRARY = "https://wangziquan-del.github.io/metals-framework/"
 
 # metric tuple: id, name, unit, source, why it matters
+# ---- LME COTR(投资基金净多) 直连补充: 7xmetal 汇总页(weekly, T+2) ----
+COTR_METALS = {"CU": "LME Copper", "ZN": "LME Zinc", "AL": "LME Aluminium",
+               "NI": "LME Nickel", "SN": "LME Tin", "PB": "LME Lead"}
+
+
+def fetch_cotr() -> dict:
+    """返回 {symbol: (date, 投资基金净多手数)}; 失败返回空。"""
+    import base64 as _b64
+    import re as _re
+    import urllib.request as _req
+    try:
+        r = _req.Request("https://7xmetal.cn/lme/cotr",
+                         headers={"User-Agent": "Mozilla/5.0"})
+        with _req.urlopen(r, timeout=15) as resp:
+            html = resp.read().decode("utf-8", "ignore")
+        m = _re.search(r"__COTR_BOOTSTRAP_B64__\s*=\s*[\"']([^\"']+)", html)
+        if not m:
+            return {}
+        d = json.loads(_b64.b64decode(m.group(1)))
+        out = {}
+        for sym, metal in COTR_METALS.items():
+            node = d.get(metal) or {}
+            cats = node.get("categories") or []
+            if "投资基金" not in cats:
+                continue
+            idx = cats.index("投资基金")
+            pos = ((node.get("other") or {}).get("positions") or [])
+            if idx < len(pos) and pos[idx] is not None:
+                out[sym] = (node.get("report_date") or node.get("date"), round(float(pos[idx]), 2))
+        return out
+    except Exception as exc:
+        print(f"[cotr] fetch failed: {exc}")
+        return {}
+
+
+def apply_cotr(products: list) -> None:
+    """COTR 值比 zhiji 指标更新时, 覆盖'投资基金净多'类指标的最新值。"""
+    cotr = fetch_cotr()
+    if not cotr:
+        return
+    for prod in products:
+        sym = str(prod.get("symbol") or "").upper()
+        if sym not in cotr:
+            continue
+        date, value = cotr[sym]
+        for m in prod.get("metrics") or []:
+            if "投资基金净多" not in (m.get("name") or ""):
+                continue
+            if str(m.get("end") or "") >= str(date):
+                continue
+            m["latest"] = value
+            m["end"] = date
+            m["stale"] = False
+            m["status"] = "ok"
+            m["comparison"] = "较上周"
+            series = m.get("series") or []
+            series.append([date, value])
+            m["series"] = series
+            m["source"] = (m.get("source") or "") + "+LME COTR"
+            print(f"[cotr] {sym} 投资基金净多更新至 {date}: {value}")
+
+
 FOCUS: dict[str, dict[str, Any]] = {
     "CU": {"route": "cu", "contradiction": "矿紧无解(TC深负)是长期底;短期定价在海外结构——伦铜Cash-3M强结构(挤仓式升水)+LME/COMEX价差(美铜关税套利)是主驱动;国内新边际在废铜:开票问题持续半年、计价系数97→99倒逼精铜替代。基调:偏多对待,回调买入,宏观冲击与伦铜结构松解(Back走平)是主要回撤源。", "marginal_focus": "LME Cash-3M结构|LME/COMEX价差(美铜关税)|废铜计价系数/开票政策|上海电解铜库存", "metrics": [
         ("ID01244863", "LME铜Cash-3M价差", "美元/吨", "Mysteel", "伦铜结构强弱(挤仓/升水)"),
@@ -491,6 +553,8 @@ def build(workers: int) -> dict[str, Any]:
             "chart_id": CHART_PICK.get(symbol),
             "library_url": f"{LIBRARY}#/c/{config['route']}",
         })
+
+    apply_cotr(output_products)
 
     payload = {
         "schema_version": 3,  # 2026-08-18: verify_site 门禁口径
