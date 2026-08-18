@@ -165,9 +165,14 @@ def api_get(path: str, params: dict[str, Any], ttl: float) -> dict[str, Any]:
         raise
 
 
+EXCLUDED_PRODUCTS = {"ZC"}  # 动力煤2021后名存实亡(限仓无成交), 2026-08-18 下架
+
+
 def get_products() -> list[dict[str, Any]]:
     products = api_get("/products", {}, 12 * 3600).get("products") or []
-    return [item for item in products if isinstance(item, dict) and item.get("product")]
+    return [item for item in products
+            if isinstance(item, dict) and item.get("product")
+            and str(item.get("product")).upper() not in EXCLUDED_PRODUCTS]
 
 
 def get_quote(symbols: str, ttl: float = 8) -> list[dict[str, Any]]:

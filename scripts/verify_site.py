@@ -9,10 +9,10 @@ ROOT = Path(__file__).resolve().parent.parent
 SITE = ROOT / "_site"
 market = json.loads((SITE / "data" / "market.json").read_text(encoding="utf-8"))
 products = market.get("products") or []
-assert market.get("total_supported") == 77, market.get("total_supported")
-assert market.get("total_published") == 77, market.get("total_published")
-assert len(products) == 77, len(products)
-assert len({item["symbol"] for item in products}) == 77
+assert market.get("total_supported") == 76, market.get("total_supported")
+assert market.get("total_published") == 76, market.get("total_published")
+assert len(products) == 76, len(products)
+assert len({item["symbol"] for item in products}) == 76
 for item in products:
     path = SITE / "data" / "symbols" / f"{item['symbol']}.json"
     assert path.is_file(), path
@@ -36,14 +36,14 @@ for item in products:
 fundamentals = json.loads((SITE / "data" / "fundamentals.json").read_text(encoding="utf-8"))
 assert fundamentals.get("schema_version") == 3
 focus = fundamentals.get("products") or []
-assert fundamentals.get("coverage", {}).get("total") == 77
+assert fundamentals.get("coverage", {}).get("total") == 76
 assert fundamentals.get("coverage", {}).get("focus") == 62
-assert len(focus) == 77
+assert len(focus) == 76
 deep = [item for item in focus if item.get("kind") == "focus"]
 assert len(deep) == 62
 assert all(2 <= len(item.get("metrics") or []) <= 3 for item in deep)
 coverage = fundamentals.get("coverage") or {}
-assert sum(int(coverage.get(key) or 0) for key in ("ready", "observe", "blocked")) == 77
+assert sum(int(coverage.get(key) or 0) for key in ("ready", "observe", "blocked")) == 76
 for item in focus:
     assert item.get("maturity") in {"placeholder", "draft", "reviewed", "deep"}
     assert item.get("decision_status") in {"ready", "observe", "blocked"}
@@ -84,4 +84,4 @@ for path in SITE.rglob("*"):
     if path.is_file() and path.suffix.lower() in {".html", ".js", ".css", ".json", ".md", ".txt"}:
         assert "wk_" not in path.read_text(encoding="utf-8", errors="ignore"), path
 assert (SITE / "assets" / "abyss-voyage-cover.png").stat().st_size > 100_000
-print("site verification: 77/77 four-timeframe strategies, access gate, fundamentals, macro and secret scan OK")
+print("site verification: 76/76 four-timeframe strategies, access gate, fundamentals, macro and secret scan OK")

@@ -30,6 +30,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Validate canonical research registry
+        run: python scripts/validate_research_registry.py
       - name: Build 77-product snapshots
         if: github.event_name != 'schedule' || github.event.schedule == '30 8 * * *'
         env:
@@ -41,6 +43,10 @@ jobs:
         env:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/refresh_quotes.py
+      - name: Build A-share stocks snapshot
+        if: github.event_name != 'schedule' || github.event.schedule == '30 8 * * *'
+        continue-on-error: true
+        run: python scripts/build_stocks.py
       - name: Verify static output
         run: python scripts/verify_site.py
       - name: Commit rebuilt data snapshots back to repo

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>渊行权益 · 全股票技术图形分析</title>
+<link rel="icon" href="../assets/favicon-32.png">
+<script src="../assets/echarts.min.js"></script>
+<style>
+:root{--bg:#0a0e17;--card:#111827;--border:#1f2937;--text:#e5e7eb;--sub:#9ca3af;--blue:#3b82f6;--green:#10b981;--red:#ef4444;--yellow:#f59e0b}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+.navbar{background:#0d1117;border-bottom:1px solid var(--border);padding:0 20px;position:sticky;top:0;z-index:100;display:flex;align-items:center;height:55px;gap:25px;overflow-x:auto}
+.logo{font-weight:bold;font-size:18px;color:var(--blue);white-space:nowrap;cursor:pointer}
+.nav-item{cursor:pointer;padding:6px 14px;border-radius:6px;white-space:nowrap}
+.nav-item:hover,.nav-item.active{background:#1a2234;color:var(--blue)}
+.nav-item a{color:inherit;text-decoration:none}
+.main{max-width:1400px;margin:15px auto;padding:0 20px;display:grid;grid-template-columns:200px 1fr;gap:15px}
+.sidebar{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;height:fit-content;position:sticky;top:70px;max-height:calc(100vh - 90px);overflow-y:auto}
+.sidebar-title{font-weight:bold;color:var(--yellow);margin-bottom:10px}
+.sector-item{padding:6px 8px;cursor:pointer;border-radius:5px;display:flex;justify-content:space-between;font-size:13px}
+.sector-item:hover{background:#1a2234}
+.sector-item.active{background:var(--blue);color:#fff}
+.up{color:var(--red)}.down{color:var(--green)}
+.content{display:flex;flex-direction:column;gap:15px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:15px}
+.card-title{font-weight:bold;margin-bottom:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:15px}
+.metric{background:#1a2234;padding:12px;border-radius:8px;border:1px solid var(--border)}
+.metric-label{font-size:12px;color:var(--sub)}
+.metric-value{font-size:20px;font-weight:bold;margin:3px 0}
+.chart-box{width:100%;height:380px}
+.chart-tall{height:460px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#1a2234;padding:8px;text-align:left;border-bottom:2px solid var(--border);cursor:pointer;white-space:nowrap}
+td{padding:8px;border-bottom:1px solid var(--border);white-space:nowrap}
+tr:hover{background:#1a2234}
+tr.stock-row{cursor:pointer}
+button{background:var(--blue);color:#fff;border:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;margin:0 2px}
+button.active{background:var(--green)}
+.hidden{display:none!important}
+.muted{color:var(--sub);font-size:12px}
+@media (max-width:768px){.main{grid-template-columns:1fr}.sidebar{position:static;max-height:none}}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="logo" onclick="location.href='../'">📊 渊行权益</div>
+  <div class="nav-item active" data-page="overview">市场总览</div>
+  <div class="nav-item" data-page="stocks">个股分析</div>
+  <div class="nav-item"><a href="https://amiya866.github.io/yafco-tracker/" target="_blank">财报跟踪 ↗</a></div>
+  <div class="nav-item"><a href="../" target="_blank">期货四框架 ↗</a></div>
+  <div class="muted" id="updatedAt" style="margin-left:auto"></div>
+</nav>
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-title">📋 板块（商品）分类</div>
+    <div id="sectorList"><div class="muted">加载中…</div></div>
+  </div>
+  <div class="content">
+    <div id="page-overview">
+      <div class="overview-grid" id="indexGrid"></div>
+      <div class="card"><div class="card-title">📈 板块涨跌幅（股票篮子等权）</div><div class="chart-box" id="sectorBar"></div></div>
+      <div class="chart-row card"><div class="card-title">📋 全池个股（点行看K线）</div>
+        <table><thead><tr><th data-k="code">代码</th><th data-k="name">名称</th><th data-k="sec">板块</th><th data-k="price">现价</th><th data-k="chg">涨跌幅</th><th data-k="turnover">换手率</th><th data-k="vol_ratio">量比</th><th data-k="pe">PE</th></tr></thead><tbody id="allStockBody"></tbody></table>
+      </div>
+    </div>
+    <div id="page-stocks" class="hidden">
+      <div class="card"><div class="card-title"><span id="klineTitle">📈 选择个股</span>
+        <div><button class="active" data-per="D">日线</button><button data-per="W">周线</button><button data-per="M">月线</button></div></div>
+        <div class="chart-box chart-tall" id="klineChart"></div></div>
+      <div class="card"><div class="card-title">📊 MACD / RSI</div><div class="chart-box" id="indicatorChart"></div></div>
+      <div class="card"><div class="card-title">📋 <span id="sectorStockTitle">板块个股</span></div>
+        <table><thead><tr><th data-k="code">代码</th><th data-k="name">名称</th><th data-k="price">现价</th><th data-k="chg">涨跌幅</th><th data-k="turnover">换手率</th><th data-k="vol_ratio">量比</th><th data-k="pe">PE</th></tr></thead><tbody id="sectorStockBody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

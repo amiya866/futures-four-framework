@@ -130,6 +130,8 @@ def materialize_site() -> None:
         shutil.copytree(ROOT / ".well-known", SITE_DIR / ".well-known")
     if (ROOT / "dl").exists():
         shutil.copytree(ROOT / "dl", SITE_DIR / "dl")
+    if (ROOT / "stocks").exists():
+        shutil.copytree(ROOT / "stocks", SITE_DIR / "stocks")
     shutil.copytree(ROOT / "data", SITE_DIR / "data")
     # 资源版本戳：index.html 与 js/css 版本绑定，防止 SW/缓存混用新旧版本
     stamp = datetime.now().astimezone().strftime("%Y%m%d%H%M")
