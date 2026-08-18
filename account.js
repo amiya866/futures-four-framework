@@ -3,7 +3,7 @@
    离线时按钮置灰提示，不影响行情功能。 */
 
 const ACCOUNT_API_LOCAL = 'http://127.0.0.1:8790';
-const ACCOUNT_API_REMOTE = 'https://employed-inkjet-sharon-fruit.trycloudflare.com';
+const ACCOUNT_API_REMOTE = 'https://northern-gourmet-alcohol-furniture.trycloudflare.com';
 let ACCOUNT_API = ACCOUNT_API_LOCAL;
 /* 本地模式(2026-08-16): 后端不可达时模拟仓落 localStorage, PWA/静态站也能用 */
 const POS_KEY = 'yafco_positions_local';
