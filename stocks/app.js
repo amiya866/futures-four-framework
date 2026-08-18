@@ -1,7 +1,7 @@
 /* 渊行权益 stocks/app.js — 真数据(东财快照, CI构建) */
 const $ = id => document.getElementById(id);
 const state = { quotes: null, sector: null, stock: null, period: 'D', kline: null };
-const SECTOR_NAMES = {CU:'铜',AL:'铝',ZN:'锌',PB:'铅',NI:'镍',SN:'锡',LC:'碳酸锂',SI:'工业硅',PS:'多晶硅',AO:'氧化铝',SS:'不锈钢',AU:'黄金',AG:'白银',RB:'螺纹钢',I:'铁矿石',J:'焦炭',JM:'焦煤',HC:'热卷',SC:'原油',BU:'沥青',FU:'燃料油',TA:'PTA',MA:'甲醇',SA:'纯碱',V:'PVC',PP:'聚丙烯',EG:'乙二醇',FG:'玻璃',UR:'尿素',C:'玉米',M:'豆粕',Y:'豆油',P:'棕榈油',OI:'菜油',RM:'菜粕',SR:'白糖',CF:'棉花',AP:'苹果',JD:'鸡蛋',LH:'生猪',PK:'花生',CJ:'红枣',SP:'纸浆',RU:'橡胶',NR:'20号胶',SF:'硅铁',SM:'锰硅',LG:'原木',EC:'集运欧线'};
+const SECTOR_NAMES = {CU:'铜',AL:'铝',ZN:'锌',PB:'铅',NI:'镍',SN:'锡',LC:'碳酸锂',SI:'工业硅',PS:'多晶硅',AO:'氧化铝',SS:'不锈钢',AU:'黄金',AG:'白银',RB:'螺纹钢',I:'铁矿石',J:'焦炭',JM:'焦煤',HC:'热卷',SC:'原油',BU:'沥青',FU:'燃料油',TA:'PTA',MA:'甲醇',SA:'纯碱',V:'PVC',PP:'聚丙烯',EG:'乙二醇',FG:'玻璃',UR:'尿素',C:'玉米',M:'豆粕',Y:'豆油',P:'棕榈油',OI:'菜油',RM:'菜粕',SR:'白糖',CF:'棉花',AP:'苹果',JD:'鸡蛋',LH:'生猪',PK:'花生',CJ:'红枣',SP:'纸浆',A:'豆一',B:'豆二',CS:'淀粉',EB:'苯乙烯',L:'塑料',PR:'瓶片',PX:'对二甲苯',PF:'短纤',PL:'丙烯',PG:'LPG',LU:'低硫燃油',BC:'国际铜',AD:'铸造铝合金',PD:'钯',PT:'铂',TF:'5年国债',TS:'2年国债',TL:'30年国债',T:'10年国债',IM:'中证1000',IC:'中证500',IF:'沪深300',IH:'上证50',RU:'橡胶',NR:'20号胶',SF:'硅铁',SM:'锰硅',LG:'原木',EC:'集运欧线'};
 const cls = v => v > 0 ? 'up' : v < 0 ? 'down' : '';
 const fmtP = v => v == null ? '—' : v >= 1000 ? v.toLocaleString('zh-CN', {maximumFractionDigits: 2}) : v;
 
