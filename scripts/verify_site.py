@@ -17,6 +17,12 @@ for item in products:
     path = SITE / "data" / "symbols" / f"{item['symbol']}.json"
     assert path.is_file(), path
     detail = json.loads(path.read_text(encoding="utf-8"))
+    volatility = detail.get("volatility") or {}
+    if volatility.get("vol20") is not None and volatility.get("vol60") is not None:
+        expanding = float(volatility["vol20"]) > float(volatility["vol60"])
+        assert volatility.get("trend") == ("扩张" if expanding else "收缩"), (item["symbol"], volatility)
+        regime = str(volatility.get("regime") or "")
+        assert ("扩张" in regime or "启动" in regime) if expanding else ("收缩" in regime or "收敛" in regime), (item["symbol"], volatility)
     assert set(detail["frameworks"]) == {"ari", "chan", "macd", "gann"}
     assert set(detail["decision"]) >= {"left_long", "left_short"}
     for plan in (detail["decision"], *(detail.get("strategies") or {}).values()):
@@ -28,13 +34,33 @@ for item in products:
         assert set(detail.get("strategies") or {}) == {"W", "D", "60", "15"}
         assert set(detail.get("data_quality") or {}) == {"W", "D", "60", "15"}
 fundamentals = json.loads((SITE / "data" / "fundamentals.json").read_text(encoding="utf-8"))
+assert fundamentals.get("schema_version") == 3
 focus = fundamentals.get("products") or []
 assert fundamentals.get("coverage", {}).get("total") == 77
 assert fundamentals.get("coverage", {}).get("focus") == 62
 assert len(focus) == 77
 deep = [item for item in focus if item.get("kind") == "focus"]
 assert len(deep) == 62
-assert all(2 <= len(item.get("metrics") or []) <= 4 for item in deep)
+assert all(2 <= len(item.get("metrics") or []) <= 3 for item in deep)
+coverage = fundamentals.get("coverage") or {}
+assert sum(int(coverage.get(key) or 0) for key in ("ready", "observe", "blocked")) == 77
+for item in focus:
+    assert item.get("maturity") in {"placeholder", "draft", "reviewed", "deep"}
+    assert item.get("decision_status") in {"ready", "observe", "blocked"}
+    quality = item.get("quality") or {}
+    assert quality.get("decision_status") == item.get("decision_status")
+    if item.get("kind") == "focus":
+        assert item.get("falsifier"), item.get("symbol")
+        for metric in item.get("metrics") or []:
+            assert metric.get("role") in {"leading", "synchronous", "falsifier"}
+            assert metric.get("mapping_quality") in {"exact", "transform", "proxy", "unverified"}
+    if item.get("decision_status") == "ready":
+        assert not quality.get("reasons"), item.get("symbol")
+        assert all(not metric.get("stale") for metric in item.get("metrics") or [])
+        assert all(metric.get("status") == "ok" for metric in item.get("metrics") or [])
+        assert all(metric.get("mapping_quality") in {"exact", "transform"} for metric in item.get("metrics") or [])
+    if item.get("decision_status") == "blocked":
+        assert (item.get("tradability") or {}).get("status") == "disabled"
 fundamental_raw = json.dumps(fundamentals, ensure_ascii=False)
 assert '"score"' not in fundamental_raw
 assert '"consistency"' not in fundamental_raw
@@ -49,7 +75,7 @@ assert "serviceWorker.register('./sw.js')" in (SITE / "app.js").read_text(encodi
 assert "LEFT-SIDE WATCHLIST" in (SITE / "index.html").read_text(encoding="utf-8")
 for name in ("app-icon-192.png", "app-icon-512.png", "apple-touch-icon.png", "favicon-32.png"):
     assert (SITE / "assets" / name).stat().st_size > 1_000, name
-assert "hour < 8" in (SITE / "auth.js").read_text(encoding="utf-8")
+assert "windowState" in (SITE / "auth.js").read_text(encoding="utf-8")  # 2026-08-18 撤密码门后仅校验结构存在
 assert (SITE / "robots.txt").read_text(encoding="utf-8").strip().endswith("Noindex: /")
 macro = json.loads((SITE / "data" / "macro.json").read_text(encoding="utf-8"))
 ev = macro.get("event", {})
