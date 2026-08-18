@@ -22,6 +22,15 @@ for node in ast.walk(tree):
 
 focus, contra, survey, chart_pick = dicts["FOCUS"], dicts["CONTRADICTIONS"], dicts["SURVEY_NOTES"], dicts["CHART_PICK"]
 
+# 片段文件(_focus_frag_*.py)的品种并入 FOCUS 命名空间
+import glob as _glob
+for frag_path in _glob.glob(str(ROOT / "scripts" / "_focus_frag_*.py")):
+    frag_tree = ast.parse(Path(frag_path).read_text(encoding="utf-8"))
+    for node in ast.walk(frag_tree):
+        tgt = getattr(node.targets[0], "id", "") if isinstance(node, ast.Assign) else (getattr(node.target, "id", "") if isinstance(node, ast.AnnAssign) else "")
+        if tgt == "FOCUS_FRAG":
+            focus.update(ast.literal_eval(node.value))
+
 # FOCUS 结构完整: route/contradiction/metrics 三要素 + 指标五元组
 for sym, cfg in focus.items():
     assert cfg.get("contradiction"), f"{sym} 缺 contradiction"
