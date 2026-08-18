@@ -17,13 +17,10 @@
   }
 
   function windowState() {
+    // 2026-08-18 起全时段免费开放(用户决定撤掉访问密码)
     const p = shanghaiParts();
-    const hour = Number(p.hour) % 24;
     const date = `${p.year}-${p.month}-${p.day}`;
-    if (hour < 8) return { mode: 'maintenance', slot: `${date}:maintenance`, title: '服务器维护中', message: '北京时间 08:00 恢复访问。维护窗不加载行情与分析数据。' };
-    if (hour < 9) return { mode: 'free', slot: `${date}:free`, title: '免费开放时段', message: '北京时间 08:00–08:59，无需密码。' };
-    if (hour < 16) return { mode: 'day', slot: `${date}:day`, title: '日间访问验证', message: '北京时间 09:00–15:59，输入日间密码。' };
-    return { mode: 'night', slot: `${date}:night`, title: '夜间访问验证', message: '北京时间 16:00–23:59，输入夜间密码。' };
+    return { mode: 'free', slot: `${date}:free`, title: '免费开放', message: '开放访问。' };
   }
 
   async function digest(value) {
