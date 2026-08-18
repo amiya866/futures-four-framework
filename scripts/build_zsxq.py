@@ -63,12 +63,20 @@ def emit_zsxq() -> None:
     """审核定稿后调用：从 news.json 的星球纪要条目生成 data/zsxq.json（按品种对齐）。"""
     news = json.loads(NEWS.read_text(encoding="utf-8"))
     by_sym: dict[str, list] = {}
+    import re as _re
     for x in news.get("items", []):
-        if x.get("sector") != "星球纪要":
+        if x.get("sector") != "星球纪要" and "知识星球" not in (x.get("source") or ""):
             continue
-        for sym in x.get("tag", "").split("/"):
-            if sym:
-                by_sym.setdefault(sym, []).append(x)
+        syms = set()
+        for sym in _re.split(r"[/、,，\s]+", x.get("tag", "")):
+            if _re.fullmatch(r"[A-Z]{1,3}", sym or ""):
+                syms.add(sym)
+        text = (x.get("title", "") + " " + x.get("summary", ""))
+        for kw, sym2 in KEYWORDS.items():
+            if kw in text:
+                syms.add(sym2)
+        for sym in syms:
+            by_sym.setdefault(sym, []).append(x)
     out = ROOT / "data" / "zsxq.json"
     out.write_text(json.dumps({"updated_at": news.get("updated_at"), "by_symbol": by_sym},
                               ensure_ascii=False, indent=1), encoding="utf-8")

@@ -63,6 +63,11 @@ button.active{background:var(--green)}
   <div class="content">
     <div id="page-overview">
       <div class="overview-grid" id="indexGrid"></div>
+      <div class="card"><div class="card-title">🔥 板块冷热榜（涨跌 + 主力净流入 + 放量家数）</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div><div class="muted" style="color:var(--red);font-weight:bold;margin-bottom:6px">热 ↑</div><div id="hotList"></div></div>
+          <div><div class="muted" style="color:var(--green);font-weight:bold;margin-bottom:6px">冷 ↓</div><div id="coldList"></div></div>
+        </div></div>
       <div class="card"><div class="card-title">📈 板块涨跌幅（股票篮子等权）</div><div class="chart-box" id="sectorBar"></div></div>
       <div class="chart-row card"><div class="card-title">📋 全池个股（点行看K线）</div>
         <table><thead><tr><th data-k="code">代码</th><th data-k="name">名称</th><th data-k="sec">板块</th><th data-k="price">现价</th><th data-k="chg">涨跌幅</th><th data-k="turnover">换手率</th><th data-k="vol_ratio">量比</th><th data-k="pe">PE</th></tr></thead><tbody id="allStockBody"></tbody></table>
@@ -73,6 +78,7 @@ button.active{background:var(--green)}
         <div><button class="active" data-per="D">日线</button><button data-per="W">周线</button><button data-per="M">月线</button></div></div>
         <div class="chart-box chart-tall" id="klineChart"></div></div>
       <div class="card"><div class="card-title">📊 MACD / RSI</div><div class="chart-box" id="indicatorChart"></div></div>
+      <div class="card"><div class="card-title">📰 相关小作文（知识星球）<span class="muted" id="essayInfo"></span></div><div id="essayBody" style="font-size:13px;line-height:1.7"></div></div>
       <div class="card"><div class="card-title">📋 <span id="sectorStockTitle">板块个股</span></div>
         <table><thead><tr><th data-k="code">代码</th><th data-k="name">名称</th><th data-k="price">现价</th><th data-k="chg">涨跌幅</th><th data-k="turnover">换手率</th><th data-k="vol_ratio">量比</th><th data-k="pe">PE</th></tr></thead><tbody id="sectorStockBody"></tbody></table></div>
     </div>

@@ -87,7 +87,7 @@ def main() -> None:
 
     # 批量行情(单次最多~80只稳妥, 分2批)
     quotes = {}
-    F = "f12,f14,f2,f3,f5,f6,f8,f9,f10,f20,f21"
+    F = "f12,f14,f2,f3,f5,f6,f8,f9,f10,f20,f21,f62"
     for i in range(0, len(codes), 70):
         batch = codes[i:i + 70]
         secids = ",".join(secid(c) for c in batch)
@@ -98,6 +98,7 @@ def main() -> None:
                 "price": it.get("f2"), "chg": it.get("f3"), "vol": it.get("f5"),
                 "amount": it.get("f6"), "turnover": it.get("f8"), "pe": it.get("f9"),
                 "vol_ratio": it.get("f10"), "mktcap": it.get("f20"),
+                "main_inflow": it.get("f62"),
             }
         time.sleep(0.8)
 
@@ -113,14 +114,22 @@ def main() -> None:
     # 板块聚合(按品种): 篮子等权涨跌
     sectors = {}
     for sym, info in products.items():
-        chgs = [quotes[s["code"]]["chg"] for s in info.get("stocks") or [] if quotes.get(s["code"], {}).get("chg") is not None]
-        if chgs:
-            sectors[sym] = {"chg": round(sum(chgs) / len(chgs), 2), "n": len(chgs)}
+        got = [quotes[s["code"]] for s in info.get("stocks") or [] if quotes.get(s["code"], {}).get("chg") is not None]
+        if got:
+            sectors[sym] = {
+                "chg": round(sum(q["chg"] for q in got) / len(got), 2), "n": len(got),
+                "inflow": round(sum((q.get("main_inflow") or 0) for q in got) / 1e8, 2),
+                "hot_n": sum(1 for q in got if (q.get("vol_ratio") or 0) >= 1.5),
+            }
 
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "kline").mkdir(exist_ok=True)
     ok = 0
     for c in codes:
+        kf = OUT / "kline" / f"{c}.json"
+        if kf.exists() and (time.time() - kf.stat().st_mtime) < 20 * 3600:
+            ok += 1
+            continue  # 增量: 20小时内已有K线则跳过
         k = build_kline(c)
         if k:
             k["code"] = c

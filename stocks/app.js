@@ -7,6 +7,8 @@ const fmtP = v => v == null ? '—' : v >= 1000 ? v.toLocaleString('zh-CN', {max
 
 async function boot() {
   const r = await fetch('../data/stocks/quotes.json?t=' + Date.now());
+  try { const z = await fetch('../data/zsxq.json?t=' + Date.now()); state.essays = (await z.json()).by_symbol || {}; }
+  catch (e) { state.essays = {}; }
   state.quotes = await r.json();
   $('updatedAt').textContent = '数据 ' + (state.quotes.updated_at || '').slice(5, 16) + ' · K线 ' + state.quotes.kline_ok + '只';
   renderSectors();
@@ -55,6 +57,18 @@ function renderOverview() {
       label: {show: true, position: 'right', color: '#9ca3af', formatter: p => p.value + '%'}}],
     tooltip: {trigger: 'axis'}
   });
+  // 冷热榜: 综合分 = 涨跌 + 流入权重 + 放量家数
+  const sc = Object.entries(state.quotes.sectors).map(([s, v]) => {
+    const score = v.chg + (v.inflow || 0) * 0.3 + (v.hot_n || 0) * 0.3;
+    return {sym: s, ...v, score};
+  }).sort((x, y) => y.score - x.score);
+  const row = v => `<div class="sector-item" data-s="${v.sym}" style="cursor:pointer"><span>${SECTOR_NAMES[v.sym] || v.sym}</span><span class="muted">${(v.inflow || 0) >= 0 ? '+' : ''}${v.inflow}亿 · 放量${v.hot_n || 0}家</span><span class="${cls(v.chg)}">${v.chg > 0 ? '+' : ''}${v.chg}%</span></div>`;
+  $('hotList').innerHTML = sc.slice(0, 6).map(row).join('');
+  $('coldList').innerHTML = sc.slice(-6).reverse().map(row).join('');
+  document.querySelectorAll('#hotList .sector-item,#coldList .sector-item').forEach(el => el.addEventListener('click', () => {
+    state.sector = el.dataset.s;
+    document.querySelector('.nav-item[data-page="stocks"]').click();
+  }));
   renderStockTable($('allStockBody'), state.quotes.stocks);
 }
 
@@ -74,10 +88,19 @@ function renderStockTable(tbody, list) {
   }));
 }
 
+function renderEssays(sym) {
+  const es = (state.essays[sym] || []).slice(0, 5);
+  $('essayInfo').textContent = es.length ? `${es.length} 条 · ${es[0].date}` : '';
+  $('essayBody').innerHTML = es.length
+    ? es.map(x => `<div style="padding:8px 0;border-bottom:1px solid var(--border)"><small class="muted">${x.date} · ${x.source || '知识星球'}</small><div><b>${x.title}</b></div><div class="muted">${(x.summary || '').slice(0, 80)}${(x.summary || '').length > 80 ? '…' : ''} <a href="${x.url}" target="_blank" style="color:var(--blue)">全文 ↗</a></div></div>`).join('')
+    : '<div class="muted">该板块近半月无相关小作文</div>';
+}
+
 function renderSectorStocks() {
   const sym = state.sector || Object.keys(state.quotes.sectors)[0];
   state.sector = sym;
   $('sectorStockTitle').textContent = (SECTOR_NAMES[sym] || sym) + '板块个股';
+  renderEssays(sym);
   const list = state.quotes.stocks.filter(s => (s.sectors || []).includes(sym));
   const tbody = $('sectorStockBody');
   tbody.innerHTML = list.map(s => stockRow(s)).join('');
