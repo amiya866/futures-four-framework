@@ -3,9 +3,10 @@ name: Refresh futures snapshots and deploy Pages
 on:
   workflow_dispatch:
   schedule:
-    # 2026-08-18 用户定稿: 价格15分钟 + 策略盘中30分钟同步重算 + 有色夜盘21:25北京加刷 + 全量每天16:30北京
-    - cron: "*/15 0-7,13-15 * * 1-5"
-    - cron: "2,32 1-3,5-6,13-15 * * 1-5"
+    # 2026-08-18 终稿(用户规则: 策略必须和价格同步):
+    # 日盘9:00-15:30北京(01-07UTC)每15分钟 价格+策略一起重算; 夜盘21-23点价格15分钟+21:25策略加刷; 16:30全量
+    - cron: "*/15 1-7 * * 1-5"
+    - cron: "*/15 13-15 * * 1-5"
     - cron: "25 13 * * 1-5"
     - cron: "30 8 * * *"
   push:
@@ -40,14 +41,14 @@ jobs:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/build_all.py --workers 8
 
-      - name: Recompute intraday strategies (30min + 21:25有色夜盘)
-        if: github.event_name == 'schedule' && (github.event.schedule == '2,32 1-3,5-6,13-15 * * 1-5' || github.event.schedule == '25 13 * * 1-5')
+      - name: Price+Strategy sync rebuild (day session 15min; 21:25 nonferrous)
+        if: github.event_name == 'schedule' && (github.event.schedule == '*/15 1-7 * * 1-5' || github.event.schedule == '25 13 * * 1-5')
         env:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/build_all.py --workers 8 --skip-fundamentals
 
-      - name: Refresh live quotes
-        if: github.event_name == 'schedule' && github.event.schedule == '*/15 0-7,13-15 * * 1-5'
+      - name: Refresh live quotes (night session 15min)
+        if: github.event_name == 'schedule' && github.event.schedule == '*/15 13-15 * * 1-5'
         env:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/refresh_quotes.py
