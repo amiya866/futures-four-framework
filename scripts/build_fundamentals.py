@@ -27,7 +27,6 @@ LIBRARY = "https://wangziquan-del.github.io/metals-framework/"
 # metric tuple: id, name, unit, source, why it matters
 FOCUS: dict[str, dict[str, Any]] = {
     "CU": {"route": "cu", "contradiction": "矿紧无解(TC深负)是长期底;短期定价在海外结构——伦铜Cash-3M强结构(挤仓式升水)+LME/COMEX价差(美铜关税套利)是主驱动;国内新边际在废铜:开票问题持续半年、计价系数97→99倒逼精铜替代。基调:偏多对待,回调买入,宏观冲击与伦铜结构松解(Back走平)是主要回撤源。", "marginal_focus": "LME Cash-3M结构|LME/COMEX价差(美铜关税)|废铜计价系数/开票政策|上海电解铜库存", "metrics": [
-        ("FU00082249", "LME 铜投资基金净多", "手", "Mysteel", "投机集中度/挤仓风险"),
         ("ID01244863", "LME铜Cash-3M价差", "美元/吨", "Mysteel", "伦铜结构强弱(挤仓/升水)"),
         ("a12840187", "LME/COMEX铜价差", "美元/吨", "SMM", "美铜关税套利空间"),
         ("s20015675", "洋山铜溢价", "美元/吨", "SMM", "中国进口买盘是否回归")]},
