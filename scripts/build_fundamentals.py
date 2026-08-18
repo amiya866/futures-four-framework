@@ -478,7 +478,7 @@ def build(workers: int) -> dict[str, Any]:
         })
 
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,  # 2026-08-18: verify_site 门禁口径
         "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "source": "知几·料（SMM/Mysteel 镜像）",
         "coverage": {"total": len(output_products), "covered": sum(bool(item.get("covered")) for item in output_products), "focus": len(FOCUS)},
