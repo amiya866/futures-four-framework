@@ -2,6 +2,8 @@ name: Refresh futures snapshots and deploy Pages
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [ff-sync]
   schedule:
     # 2026-08-18 终稿(用户规则: 策略必须和价格同步):
     # 日盘9:00-15:30北京(01-07UTC)每15分钟 价格+策略一起重算; 夜盘21-23点价格15分钟+21:25策略加刷; 16:30全量
@@ -36,13 +38,13 @@ jobs:
       - name: Validate canonical research registry
         run: python scripts/validate_research_registry.py
       - name: Build 77-product snapshots
-        if: (github.event_name != 'schedule' || github.event.schedule == '30 8 * * *') && !contains(github.event.head_commit.message, '[data-only]')
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * *') && !contains(github.event.head_commit.message, '[data-only]')
         env:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/build_all.py --workers 8
 
       - name: Price+Strategy sync rebuild (day session 15min; 21:25 nonferrous)
-        if: github.event_name == 'schedule' && (github.event.schedule == '*/15 1-7 * * 1-5' || github.event.schedule == '25 13 * * 1-5')
+        if: github.event_name == 'repository_dispatch' || (github.event_name == 'schedule' && (github.event.schedule == '*/15 1-7 * * 1-5' || github.event.schedule == '25 13 * * 1-5'))
         env:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/build_all.py --workers 8 --skip-fundamentals
@@ -62,7 +64,7 @@ jobs:
       - name: Verify static output
         run: python scripts/verify_site.py
       - name: Commit rebuilt data snapshots back to repo
-        if: github.event_name != 'schedule' || github.event.schedule == '30 8 * * *'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * *') && !contains(github.event.head_commit.message, '[data-only]')
         continue-on-error: true
         run: |
           git config user.name "ff-actions"
