@@ -3,12 +3,12 @@
 
   // ═══════════════════════════════════════════════════════════════════
   // 渊行站 · 会员登录门禁（2026-08-20）
-  //   · 注册：星球邀请码限定（改 INVITE_CODE）；账号存浏览器 localStorage
+  //   · 注册：开放手机号注册（存浏览器 localStorage）
   //   · 登录：优先后端 Worker(若可达) → 本地注册账号 → 管理员预置 MEMBERS
-  //   · 管理员预置账号改 MEMBERS；星球邀请码可随时改 INVITE_CODE
+  //   · 管理员预置账号改 MEMBERS
   // ═══════════════════════════════════════════════════════════════════
-  const INVITE_CODE = 'ABYSS-YAFCO-2026';  // 星球邀请码（注册必填，管理员可改）
-  const USERS_KEY = 'yafco_users_v1';      // 本地注册用户 {用户名: sha256(密码)}
+  const USERS_KEY = 'yafco_users_v1';      // 本地注册用户 {手机号: sha256(密码)}
+  const PHONE_RE = /^1\d{10}$/;            // 手机号格式
   const MEMBERS = Object.freeze({           // 管理员预置账号（后端不可达时兜底）
     'admin': '9c010f134b519e5e17a12ef346bf3ba811a6bc57c422fcfbdba3b491791b972b',  // AbyssYafco2026（请改）
   });
@@ -25,9 +25,10 @@
   }
 
   function windowState() {
+    // 2026-08-20：暂时免费开放（登录门禁代码已备，过几天再启用）
     const p = shanghaiParts();
     const date = `${p.year}-${p.month}-${p.day}`;
-    return { mode: 'gated', slot: `${date}:gated`, title: '渊行 · 会员登录', message: '登录或注册（星球邀请码）进入。' };
+    return { mode: 'free', slot: `${date}:free`, title: '渊行', message: '开放访问。' };
   }
 
   async function digest(value) {
@@ -93,7 +94,6 @@
     const form = document.getElementById('accessForm');
     const input = document.getElementById('accessPassword');
     const userInput = document.getElementById('accessUsername');
-    const inviteInput = document.getElementById('accessInvite');
     const toggle = document.getElementById('accessToggle');
     const submit = document.getElementById('accessSubmit');
     const title = document.getElementById('accessTitle');
@@ -102,11 +102,10 @@
     if (!form || !input || !userInput) return;
 
     function renderMode() {
-      inviteInput.style.display = isRegister ? '' : 'none';
       submit.textContent = isRegister ? '注册并进入' : '进入渊行';
       toggle.textContent = isRegister ? '已有账号？登录' : '没有账号？注册';
       title.textContent = isRegister ? '渊行 · 会员注册' : '渊行 · 会员登录';
-      message.textContent = isRegister ? '星球会员：用邀请码注册。' : '输入会员账号密码登录。';
+      message.textContent = isRegister ? '手机号注册即可进入（谁都能注册）。' : '输入手机号+密码登录。';
     }
     if (toggle) toggle.addEventListener('click', () => { isRegister = !isRegister; renderMode(); });
 
@@ -126,8 +125,8 @@
       let ok = false, failMsg = '';
 
       if (isRegister) {
-        if (inviteInput.value.trim() !== INVITE_CODE) return showGate(current, '星球邀请码不正确，注册失败。');
-        if (MEMBERS[username] || users[username]) return showGate(current, '该账号已存在，请直接登录。');
+        if (!PHONE_RE.test(username)) return showGate(current, '请输入正确的11位手机号。');
+        if (MEMBERS[username] || users[username]) return showGate(current, '该手机号已注册，请直接登录。');
         users[username] = await digest(password);
         saveUsers(users);
         ok = true;
