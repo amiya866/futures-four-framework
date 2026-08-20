@@ -1,9 +1,19 @@
 (() => {
   'use strict';
 
-  const HASHES = Object.freeze({
-    day: '8473d01df08bbb2e40cd7f0ad5e7c9ba002e3674eb16cbbe261c3c46991d6b9c',
-    night: 'dfc1d541e6dbbc1f24d98dde8da2f19bd6fc57565ff43ff04a012a12958966ca',
+  // ═══════════════════════════════════════════════════════════════════
+  // 渊行站 · 星球会员登录门禁（2026-08-20 由管理员管理账号）
+  //
+  // 账号由管理员维护：在下方 MEMBERS 字典里加/删条目即可放人/踢人。
+  //   MEMBERS = { "用户名": "该密码的 SHA-256 十六进制" }
+  // 生成密码哈希：python -c "import hashlib;print(hashlib.sha256('密码'.encode()).hexdigest())"
+  // 或任选在线 SHA-256 工具。改完 push 到 main 即生效。
+  //
+  // ⚠️ 纯静态站无法做服务端鉴权——这是浏览器本地软门禁（账号数据在页面内）。
+  //    想更安全需后端/托管鉴权，本站受静态托管限制采用此方案。
+  // ═══════════════════════════════════════════════════════════════════
+  const MEMBERS = Object.freeze({
+    'admin': '9c010f134b519e5e17a12ef346bf3ba811a6bc57c422fcfbdba3b491791b972b',  // AbyssYafco2026（管理员，请尽快改）
   });
   const SESSION_KEY = 'yafco_access_v2';
   const FAILURE_KEY = 'yafco_access_failures_v2';
@@ -17,24 +27,15 @@
   }
 
   function windowState() {
-    // 2026-08-18 起全时段免费开放(用户决定撤掉访问密码)
     const p = shanghaiParts();
     const date = `${p.year}-${p.month}-${p.day}`;
-    return { mode: 'free', slot: `${date}:free`, title: '免费开放', message: '开放访问。' };
+    return { mode: 'gated', slot: `${date}:gated`, title: '渊行 · 会员登录', message: '输入星球会员账号密码进入。' };
   }
 
   async function digest(value) {
     const bytes = new TextEncoder().encode(value);
     const hash = await crypto.subtle.digest('SHA-256', bytes);
     return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-  }
-
-  async function serverAuthorize(password) {
-    try {
-      const response = await fetch('/__auth', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password})});
-      if (response.status === 404 || response.status === 405) return true;
-      return response.ok;
-    } catch (_) { return true; }
   }
 
   function failures() {
@@ -77,28 +78,31 @@
     let current = enforce();
     const form = document.getElementById('accessForm');
     const input = document.getElementById('accessPassword');
+    const userInput = document.getElementById('accessUsername');
+    if (!form || !input || !userInput) return;
+
     form.addEventListener('submit', async event => {
       event.preventDefault();
       current = windowState();
-      if (current.mode === 'maintenance') return showGate(current);
       const record = failures();
       const now = Date.now();
       if (record.lockUntil && now < record.lockUntil) {
         return showGate(current, `尝试过多，请 ${Math.ceil((record.lockUntil - now) / 1000)} 秒后再试。`);
       }
+      const username = userInput.value.trim();
       const password = input.value;
-      const ok = current.mode === 'free' || await digest(password) === HASHES[current.mode];
-      input.value = '';
-      if (ok && await serverAuthorize(password)) {
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify({ slot: current.slot, at: now }));
-        localStorage.removeItem(FAILURE_KEY);
-        unlock(current);
-      } else {
+      if (!username || !password) return showGate(current, '请输入账号和密码。');
+      const expected = MEMBERS[username];
+      if (!expected) return showGate(current, '账号不存在，请联系星球主开通。');
+      if (await digest(password) !== expected) {
         const count = (record.count || 0) + 1;
         const lockUntil = count >= 5 ? now + Math.min(300000, 30000 * (count - 4)) : 0;
         localStorage.setItem(FAILURE_KEY, JSON.stringify({ count, lockUntil }));
-        showGate(current, lockUntil ? '密码错误次数过多，已暂时锁定。' : `密码不正确，还可尝试 ${5 - count} 次。`);
+        return showGate(current, lockUntil ? '密码错误次数过多，已暂时锁定。' : `密码不正确，还可尝试 ${5 - count} 次。`);
       }
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ slot: current.slot, at: now }));
+      localStorage.removeItem(FAILURE_KEY);
+      unlock(current);
     });
     setInterval(enforce, 30000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) enforce(); });
