@@ -249,62 +249,36 @@ FALLBACK_PRODUCTS: dict[str, tuple[str, str, str]] = {
 
 
 def get_products() -> list[dict[str, Any]]:
+    # 兜底：zhiji /products → data/market.json（都可能缺 sector/exch 或漂移）
+    loaded: dict[str, dict[str, Any]] = {}
     try:
-        products = api_get("/products", {}, 12 * 3600).get("products") or []
+        for item in api_get("/products", {}, 12 * 3600).get("products") or []:
+            if isinstance(item, dict) and item.get("product"):
+                loaded[str(item["product"]).upper()] = item
     except Exception:
-        products = []
-    if not products:
-        # 回退1：仓库 data/market.json（其 products 用 symbol 键）
+        pass
+    if not loaded:
         try:
             market = json.loads((ROOT / "data" / "market.json").read_text(encoding="utf-8"))
-            products = market.get("products") or []
+            for item in market.get("products") or []:
+                if isinstance(item, dict):
+                    code = str(item.get("product") or item.get("symbol") or "").upper()
+                    if code:
+                        loaded[code] = item
         except Exception:
-            products = []
-    if not products:
-        # 回退2：硬编码 76 品种兜底（不依赖任何外部文件）
-        products = [
-            {"product": code, "name": name, "exch": exch, "sector": sector}
-            for code, (name, exch, sector) in FALLBACK_PRODUCTS.items()
-        ]
-    normalized: list[dict[str, Any]] = []
-    for item in products:
-        if not isinstance(item, dict):
+            pass
+    # 始终以 FALLBACK_PRODUCTS 规范注册表为准（name/exch/sector 权威，防 market.json 漂移成其他）
+    out: list[dict[str, Any]] = []
+    for code, (name, exch, sector) in FALLBACK_PRODUCTS.items():
+        if code in EXCLUDED_PRODUCTS:
             continue
-        code = str(item.get("product") or item.get("symbol") or "").upper()
-        # 归正到规范 76 品种（FALLBACK_PRODUCTS 为准），防 market.json 被历史构建写成 77
-        if code and code not in EXCLUDED_PRODUCTS and code in FALLBACK_PRODUCTS:
-            row = dict(item)
-            row["product"] = code
-            normalized.append(row)
-    return normalized
-
-
-# ── sina 行情源直连（2026-08-20 起主用，zhiji 配额耗尽；不依赖 akshare）──
-SINA_NODES = {
-    # 上期所
-    "AU": "hj_qh", "AG": "by_qh", "CU": "tong_qh", "AL": "lv_qh", "ZN": "xing_qh",
-    "SN": "xi_qh", "NI": "ni_qh", "PB": "qian_qh", "RB": "lwg_qh", "HC": "rzjb_qh",
-    "SS": "bxg_qh", "RU": "xj_qh", "BU": "lq_qh", "FU": "ry_qh", "SP": "zj_qh",
-    "NR": "ehj_qh", "AO": "ao_qh", "SC": "yy_qh", "LU": "lu_qh", "BC": "bc_qh",
-    "AD": "ad_qh", "BR": "br_qh", "EC": "ec_qh", "WR": "xc_qh",
-    # 大商所
-    "I": "tks_qh", "J": "jt_qh", "JM": "jm_qh", "V": "pvc_qh", "L": "lldpe_qh",
-    "PP": "jbx_qh", "EG": "yec_qh", "EB": "byx_qh", "M": "dp_qh", "Y": "dy_qh",
-    "A": "dd_qh", "B": "de_qh", "C": "hym_qh", "CS": "ymdf_qh", "PG": "pg_qh",
-    "LH": "lh_qh", "JD": "jd_qh", "RR": "gm_qh", "LG": "lg_qh", "BZ": "bz_qh",
-    "P": "zly_qh",
-    # 郑商所
-    "CF": "mh_qh", "SR": "bst_qh", "TA": "pta_qh", "MA": "zc_qh", "FG": "bl_qh",
-    "SA": "cj_qh", "UR": "ns_qh", "AP": "xpg_qh", "CJ": "hz_qh", "RM": "czp_qh",
-    "OI": "czy_qh", "PF": "pf_qh", "PK": "pk_qh", "SH": "sh_qh", "SF": "gt_qh",
-    "SM": "mg_qh", "PX": "px_qh", "PL": "pl_qh", "PR": "pr_qh", "TL": "wxd_qh",
-    "TS": "qm_qh",
-    # 中金所
-    "IF": "qz_qh", "IC": "zzgz_qh", "IM": "im_qh", "IH": "szgz_qh",
-    "T": "sngz_qh", "TF": "gz_qh",
-    # 广期所
-    "LC": "lc_qh", "SI": "si_qh", "PS": "ps_qh", "PT": "pt_qh", "PD": "pd_qh",
-}
+        row = dict(loaded.get(code) or {})
+        row["product"] = code
+        row["name"] = name
+        row["exch"] = exch
+        row["sector"] = sector
+        out.append(row)
+    return out
 
 
 def _sina_json(url: str, ref: str) -> Any:
