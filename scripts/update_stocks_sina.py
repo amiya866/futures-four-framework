@@ -80,6 +80,12 @@ def main() -> int:
             st["price"] = quotes[c]["price"]
             st["chg"] = quotes[c]["chg"]
     OUT.mkdir(parents=True, exist_ok=True)
+    # 自我保护：写前备份
+    try:
+        if (OUT / "quotes.json").exists():
+            (OUT / "quotes.json").replace(OUT / "quotes.json.bak")
+    except OSError:
+        pass
     (OUT / "quotes.json").write_text(json.dumps(old, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print("[sina-stocks] quotes.json written")
     return 0
