@@ -154,11 +154,18 @@ def sina_quotes(codes: list[str]) -> dict[str, dict]:
 
 
 def sina_daily(code: str, n: int = 70) -> list[float]:
-    """akshare 新浪前复权日线（klc_kl.js 已加密，走 akshare 解码）。"""
+    """新浪日K直连（2026-08-20 改，免 akshare，~0.2s/只）。
+    端点返回 JSONP: var _=([{"day":..,"close":..},...])，取收盘价。"""
+    url = ("https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_=/CN_MarketDataService.getKLineData"
+           f"?symbol={code}&scale=240&ma=no&datalen={n}")
+    req = urllib.request.Request(url, headers={"Referer": "https://finance.sina.com.cn", "User-Agent": "Mozilla/5.0"})
     try:
-        import akshare as ak
-        df = ak.stock_zh_a_daily(symbol=code, adjust="qfq")
-        return [float(x) for x in df["close"].tolist()[-n:]]
+        text = urllib.request.urlopen(req, timeout=15).read().decode("utf-8", "replace")
+        m = re.search(r"\((\[.*\])\)", text, re.S)
+        if not m:
+            return []
+        data = json.loads(m.group(1))
+        return [float(x["close"]) for x in data if x.get("close")]
     except Exception:
         return []
 
@@ -169,11 +176,16 @@ def main() -> None:
     print(f"实时行情 {len(quotes)}/{len(all_codes)}")
 
     daily = {}
-    for i, code in enumerate(all_codes, 1):
-        daily[code] = sina_daily(code)
-        if i % 20 == 0:
-            print(f"日线 {i}/{len(all_codes)}", flush=True)
-        time.sleep(0.25)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        futs = {pool.submit(sina_daily, c): c for c in all_codes}
+        done = 0
+        for fut in as_completed(futs):
+            c = futs[fut]
+            daily[c] = fut.result()
+            done += 1
+            if done % 20 == 0:
+                print(f"日线 {done}/{len(all_codes)}", flush=True)
 
     out = {}
     for sym, stocks in EQUITY_MAP.items():
