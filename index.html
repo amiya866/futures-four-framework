@@ -34,11 +34,13 @@
       <h1 id="accessTitle">校验航行权限</h1>
       <p id="accessMessage">正在读取北京时间访问窗口……</p>
       <form id="accessForm" class="hidden" autocomplete="off">
-        <input id="accessUsername" type="text" placeholder="账号（星球会员）" maxlength="24" autocomplete="username" required>
+        <input id="accessUsername" type="text" placeholder="账号" maxlength="24" autocomplete="username" required>
         <input id="accessPassword" type="password" placeholder="密码" maxlength="32" autocomplete="current-password" required>
-        <button type="submit">进入渊行</button>
+        <input id="accessInvite" type="text" placeholder="星球邀请码（注册时必填）" maxlength="24" autocomplete="off" style="display:none">
+        <button type="submit" id="accessSubmit">进入渊行</button>
+        <button type="button" id="accessToggle" class="link-btn">没有账号？注册</button>
       </form>
-      <small id="accessSchedule">渊行 · 知识星球会员制访问（账号由管理员开通）</small>
+      <small id="accessSchedule">渊行 · 星球会员制：注册需邀请码，账号本地保存</small>
     </div>
   </section>
   <section class="cover" id="cover">
