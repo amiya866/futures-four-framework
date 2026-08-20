@@ -33,8 +33,12 @@
       <span>YAFCO / ACCESS CONTROL</span>
       <h1 id="accessTitle">校验航行权限</h1>
       <p id="accessMessage">正在读取北京时间访问窗口……</p>
-      <form id="accessForm" class="hidden" autocomplete="off"><input id="accessPassword" type="password" placeholder="输入当前时段密码" maxlength="32" required><button type="submit">进入渊行</button></form>
-      <small id="accessSchedule">00:00–07:59 维护 · 08:00–08:59 开放 · 09:00–15:59 / 16:00–23:59 分时鉴权</small>
+      <form id="accessForm" class="hidden" autocomplete="off">
+        <input id="accessUsername" type="text" placeholder="账号（星球会员）" maxlength="24" autocomplete="username" required>
+        <input id="accessPassword" type="password" placeholder="密码" maxlength="32" autocomplete="current-password" required>
+        <button type="submit">进入渊行</button>
+      </form>
+      <small id="accessSchedule">渊行 · 知识星球会员制访问（账号由管理员开通）</small>
     </div>
   </section>
   <section class="cover" id="cover">
