@@ -136,10 +136,34 @@ def main() -> None:
             }
 
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / "kline").mkdir(exist_ok=True)
-    ok = 0
+    kdir = OUT / "kline"
+    kdir.mkdir(exist_ok=True)
+
+    def write_quotes(kline_ok: int) -> None:
+        for c in codes:
+            pool[c]["has_kline"] = (kdir / f"{c}.json").exists()
+        payload = {
+            "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "indices": indices,
+            "sectors": sectors,
+            "stocks": [
+                {**pool[c], "sectors": sorted(pool[c]["sectors"]), **quotes.get(c, {})}
+                for c in codes
+            ],
+            "kline_ok": kline_ok,
+        }
+        payload["stocks"] = [{**s, "sectors": s["sectors"]} for s in payload["stocks"]]
+        (OUT / "quotes.json").write_text(
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+        )
+
+    # 先写 quotes.json（板块涨跌幅/报价即时更新；K线慢不阻塞，2026-08-20 优化）
+    ok_before = sum(1 for c in codes if (kdir / f"{c}.json").exists())
+    write_quotes(ok_before)
+
+    ok = ok_before
     for c in codes:
-        kf = OUT / "kline" / f"{c}.json"
+        kf = kdir / f"{c}.json"
         if kf.exists() and (time.time() - kf.stat().st_mtime) < 20 * 3600:
             ok += 1
             continue  # 增量: 20小时内已有K线则跳过
@@ -147,25 +171,12 @@ def main() -> None:
         if k:
             k["code"] = c
             k["name"] = pool[c]["name"]
-            (OUT / "kline" / f"{c}.json").write_text(json.dumps(k, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+            kf.write_text(json.dumps(k, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
             ok += 1
         time.sleep(0.35)
 
-    kdir = OUT / "kline"
-    for c in codes:
-        pool[c]["has_kline"] = (kdir / f"{c}.json").exists()
-    payload = {
-        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-        "indices": indices,
-        "sectors": sectors,
-        "stocks": [
-            {**pool[c], "sectors": sorted(pool[c]["sectors"]), **quotes.get(c, {})}
-            for c in codes
-        ],
-        "kline_ok": ok,
-    }
-    payload["stocks"] = [{**s, "sectors": s["sectors"]} for s in payload["stocks"]]
-    (OUT / "quotes.json").write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    # K线跑完刷新 kline_ok（二次写，快）
+    write_quotes(ok)
     build_financials()
     build_elasticity(quotes)
     print(f"[stocks] quotes={len(quotes)} kline={ok}/{len(codes)}")
