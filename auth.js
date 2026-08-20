@@ -2,18 +2,15 @@
   'use strict';
 
   // ═══════════════════════════════════════════════════════════════════
-  // 渊行站 · 星球会员登录门禁（2026-08-20 由管理员管理账号）
-  //
-  // 账号由管理员维护：在下方 MEMBERS 字典里加/删条目即可放人/踢人。
-  //   MEMBERS = { "用户名": "该密码的 SHA-256 十六进制" }
-  // 生成密码哈希：python -c "import hashlib;print(hashlib.sha256('密码'.encode()).hexdigest())"
-  // 或任选在线 SHA-256 工具。改完 push 到 main 即生效。
-  //
-  // ⚠️ 纯静态站无法做服务端鉴权——这是浏览器本地软门禁（账号数据在页面内）。
-  //    想更安全需后端/托管鉴权，本站受静态托管限制采用此方案。
+  // 渊行站 · 会员登录门禁（2026-08-20）
+  // 登录走后端 Cloudflare Worker：https://auth.abysstrades.xyz/api/login
+  //   （Worker 不可达时回退本地 MEMBERS 字典，保证离线/未部署时仍可用）
+  // 账号由管理员在 Worker 网页管理界面管理（auth-worker/admin.html）。
   // ═══════════════════════════════════════════════════════════════════
+  const AUTH_API = 'https://auth.abysstrades.xyz';
+  // 本地回退账号（Worker 不可达时用；管理员仍可直接改这里）
   const MEMBERS = Object.freeze({
-    'admin': '9c010f134b519e5e17a12ef346bf3ba811a6bc57c422fcfbdba3b491791b972b',  // AbyssYafco2026（管理员，请尽快改）
+    'admin': '9c010f134b519e5e17a12ef346bf3ba811a6bc57c422fcfbdba3b491791b972b',  // AbyssYafco2026（请尽快改）
   });
   const SESSION_KEY = 'yafco_access_v2';
   const FAILURE_KEY = 'yafco_access_failures_v2';
@@ -29,7 +26,7 @@
   function windowState() {
     const p = shanghaiParts();
     const date = `${p.year}-${p.month}-${p.day}`;
-    return { mode: 'gated', slot: `${date}:gated`, title: '渊行 · 会员登录', message: '输入星球会员账号密码进入。' };
+    return { mode: 'gated', slot: `${date}:gated`, title: '渊行 · 会员登录', message: '输入会员账号密码进入。' };
   }
 
   async function digest(value) {
@@ -74,6 +71,26 @@
     return current;
   }
 
+  // 后端登录；失败(网络)返回 null → 回退本地
+  async function serverLogin(username, password) {
+    try {
+      const resp = await fetch(`${AUTH_API}/api/login`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (resp.status === 401) return { ok: false, msg: data.msg || '账号或密码不正确' };
+      return data.ok ? { ok: true } : { ok: false, msg: data.msg || '登录失败' };
+    } catch (_) { return null; }  // Worker 不可达
+  }
+
+  function localLogin(username, password) {
+    const expected = MEMBERS[username];
+    if (!expected) return { ok: false, msg: '账号不存在，请联系管理员开通。' };
+    return digest(password).then(h => h === expected ? { ok: true } : { ok: false, msg: '密码不正确（本地回退）。' });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     let current = enforce();
     const form = document.getElementById('accessForm');
@@ -92,13 +109,14 @@
       const username = userInput.value.trim();
       const password = input.value;
       if (!username || !password) return showGate(current, '请输入账号和密码。');
-      const expected = MEMBERS[username];
-      if (!expected) return showGate(current, '账号不存在，请联系星球主开通。');
-      if (await digest(password) !== expected) {
+
+      let result = await serverLogin(username, password);
+      if (result === null) result = await localLogin(username, password);  // Worker 不可达 → 本地回退
+      if (!result.ok) {
         const count = (record.count || 0) + 1;
         const lockUntil = count >= 5 ? now + Math.min(300000, 30000 * (count - 4)) : 0;
         localStorage.setItem(FAILURE_KEY, JSON.stringify({ count, lockUntil }));
-        return showGate(current, lockUntil ? '密码错误次数过多，已暂时锁定。' : `密码不正确，还可尝试 ${5 - count} 次。`);
+        return showGate(current, (result.msg || '登录失败') + (lockUntil ? `（锁定 ${Math.ceil(lockUntil / 1000)} 秒）` : ''));
       }
       sessionStorage.setItem(SESSION_KEY, JSON.stringify({ slot: current.slot, at: now }));
       localStorage.removeItem(FAILURE_KEY);
