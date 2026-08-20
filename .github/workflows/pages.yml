@@ -57,14 +57,18 @@ jobs:
       - name: Materialize site only (data-only fast path)
         if: github.event_name == 'push' && contains(github.event.head_commit.message, '[data-only]')
         run: python -c "import sys; sys.path.insert(0, 'scripts'); from build_all import materialize_site; materialize_site()"
-      - name: Build A-share stocks snapshot
-        # 日盘 15min 股票已并入本地 _ff_sync15.py（中国机 eastmoney 快）；Actions 仅 08:30/手动兜底
+      - name: Update A-share stocks (sina fast, 15min 日盘; 电脑关也由 Actions 兜底)
+        # sina 直连快更 ~10s；本地 _ff_sync15.py 与 Actions 双通道，关机后台也自动
+        if: github.event_name == 'repository_dispatch' || (github.event_name == 'schedule' && github.event.schedule == '*/15 1-7 * * 1-5') || github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * *'
+        continue-on-error: true
+        run: python scripts/update_stocks_sina.py
+      - name: Re-materialize after stocks (stocks 晚于主 materialize, 需重物化才进 _site)
+        if: github.event_name == 'repository_dispatch' || (github.event_name == 'schedule' && github.event.schedule == '*/15 1-7 * * 1-5') || github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * *'
+        run: python -c "import sys; sys.path.insert(0, 'scripts'); from build_all import materialize_site; materialize_site()"
+      - name: Build A-share stocks snapshot (full, 08:30/手动补市值PE K线)
         if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * *'
         continue-on-error: true
         run: python scripts/build_stocks.py
-      - name: Re-materialize after stocks (build_stocks 晚于主 materialize, 需重物化才进 _site)
-        if: github.event_name == 'workflow_dispatch' || github.event.schedule == '30 8 * * *'
-        run: python -c "import sys; sys.path.insert(0, 'scripts'); from build_all import materialize_site; materialize_site()"
       - name: Verify static output
         run: python scripts/verify_site.py
       - name: Commit rebuilt data snapshots back to repo
