@@ -174,7 +174,17 @@ EXCLUDED_PRODUCTS = {"ZC"}  # 动力煤2021后名存实亡(限仓无成交), 202
 
 
 def get_products() -> list[dict[str, Any]]:
-    products = api_get("/products", {}, 12 * 3600).get("products") or []
+    try:
+        products = api_get("/products", {}, 12 * 3600).get("products") or []
+    except Exception:
+        products = []
+    if not products:
+        # 回退：zhiji 挂/无缓存时读仓库 data/market.json 的产品清单
+        try:
+            market = json.loads((ROOT / "data" / "market.json").read_text(encoding="utf-8"))
+            products = market.get("products") or []
+        except Exception:
+            products = []
     return [item for item in products
             if isinstance(item, dict) and item.get("product")
             and str(item.get("product")).upper() not in EXCLUDED_PRODUCTS]
