@@ -182,8 +182,7 @@ FALLBACK_PRODUCTS: dict[str, tuple[str, str]] = {
     "L": ("塑料", "DCE"), "PP": ("聚丙烯", "DCE"), "EG": ("乙二醇", "DCE"), "EB": ("苯乙烯", "DCE"),
     "M": ("豆粕", "DCE"), "Y": ("豆油", "DCE"), "A": ("豆一", "DCE"), "B": ("豆二", "DCE"),
     "C": ("玉米", "DCE"), "CS": ("玉米淀粉", "DCE"), "PG": ("液化石油气", "DCE"), "LH": ("生猪", "DCE"),
-    "JD": ("鸡蛋", "DCE"), "RR": ("粳米", "DCE"), "LG": ("原木", "DCE"), "BZ": ("纯苯", "DCE"),
-    "P": ("棕榈油", "DCE"),
+    "JD": ("鸡蛋", "DCE"), "LG": ("原木", "DCE"), "BZ": ("纯苯", "DCE"), "P": ("棕榈油", "DCE"),
     # 郑商所
     "CF": ("棉花", "CZCE"), "SR": ("白糖", "CZCE"), "TA": ("PTA", "CZCE"), "MA": ("郑醇", "CZCE"),
     "FG": ("玻璃", "CZCE"), "SA": ("纯碱", "CZCE"), "UR": ("尿素", "CZCE"), "AP": ("鲜苹果", "CZCE"),
