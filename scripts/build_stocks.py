@@ -12,14 +12,14 @@ OUT = ROOT / "data" / "stocks"
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 
-def fetch(url: str, retries: int = 3) -> dict | None:
+def fetch(url: str, retries: int = 2) -> dict | None:
     for i in range(retries):
         try:
             req = urllib.request.Request(url, headers=UA)
-            with urllib.request.urlopen(req, timeout=15) as r:
+            with urllib.request.urlopen(req, timeout=6) as r:
                 return json.loads(r.read().decode("utf-8"))
         except Exception:
-            time.sleep(1.5 * (i + 1))
+            time.sleep(0.5 * (i + 1))
     return None
 
 
@@ -102,6 +102,9 @@ def main() -> None:
             }
         time.sleep(0.8)
 
+    if not quotes:
+        print("[stocks] 报价拉取失败(上游不可达)，跳过本轮")
+        return
     # 市值/PE 缺失回补(XD日等 ulist 缺字段): 单票接口 f116=总市值 f164=PE(TTM)
     for c in codes:
         if quotes.get(c, {}).get("mktcap") is None or quotes.get(c, {}).get("pe") is None:
