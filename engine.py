@@ -167,21 +167,67 @@ def api_get(path: str, params: dict[str, Any], ttl: float) -> dict[str, Any]:
 EXCLUDED_PRODUCTS = {"ZC"}  # 动力煤2021后名存实亡(限仓无成交), 2026-08-18 下架
 
 
+# 兜底产品清单（zhiji 挂 + market.json 空时保证构建不断流）
+FALLBACK_PRODUCTS: dict[str, tuple[str, str]] = {
+    # 上期所
+    "AU": ("黄金", "SHFE"), "AG": ("白银", "SHFE"), "CU": ("沪铜", "SHFE"), "AL": ("沪铝", "SHFE"),
+    "ZN": ("沪锌", "SHFE"), "SN": ("沪锡", "SHFE"), "NI": ("沪镍", "SHFE"), "PB": ("沪铅", "SHFE"),
+    "RB": ("螺纹钢", "SHFE"), "HC": ("热轧卷板", "SHFE"), "SS": ("不锈钢", "SHFE"), "RU": ("橡胶", "SHFE"),
+    "BU": ("沥青", "SHFE"), "FU": ("燃料油", "SHFE"), "SP": ("纸浆", "SHFE"), "NR": ("20号胶", "SHFE"),
+    "AO": ("氧化铝", "SHFE"), "SC": ("原油", "SHFE"), "LU": ("低硫燃料油", "SHFE"), "BC": ("国际铜", "SHFE"),
+    "AD": ("铸造铝合金", "SHFE"), "BR": ("丁二烯橡胶", "SHFE"), "EC": ("集运指数欧线", "SHFE"),
+    "WR": ("线材", "SHFE"),
+    # 大商所
+    "I": ("铁矿石", "DCE"), "J": ("焦炭", "DCE"), "JM": ("焦煤", "DCE"), "V": ("PVC", "DCE"),
+    "L": ("塑料", "DCE"), "PP": ("聚丙烯", "DCE"), "EG": ("乙二醇", "DCE"), "EB": ("苯乙烯", "DCE"),
+    "M": ("豆粕", "DCE"), "Y": ("豆油", "DCE"), "A": ("豆一", "DCE"), "B": ("豆二", "DCE"),
+    "C": ("玉米", "DCE"), "CS": ("玉米淀粉", "DCE"), "PG": ("液化石油气", "DCE"), "LH": ("生猪", "DCE"),
+    "JD": ("鸡蛋", "DCE"), "RR": ("粳米", "DCE"), "LG": ("原木", "DCE"), "BZ": ("纯苯", "DCE"),
+    "P": ("棕榈油", "DCE"),
+    # 郑商所
+    "CF": ("棉花", "CZCE"), "SR": ("白糖", "CZCE"), "TA": ("PTA", "CZCE"), "MA": ("郑醇", "CZCE"),
+    "FG": ("玻璃", "CZCE"), "SA": ("纯碱", "CZCE"), "UR": ("尿素", "CZCE"), "AP": ("鲜苹果", "CZCE"),
+    "CJ": ("红枣", "CZCE"), "RM": ("菜粕", "CZCE"), "OI": ("菜油", "CZCE"), "PF": ("短纤", "CZCE"),
+    "PK": ("花生", "CZCE"), "SH": ("烧碱", "CZCE"), "SF": ("硅铁", "CZCE"), "SM": ("锰硅", "CZCE"),
+    "PX": ("二甲苯", "CZCE"), "PL": ("丙烯", "CZCE"), "PR": ("瓶级聚酯切片", "CZCE"),
+    "TL": ("晚籼稻", "CZCE"), "TS": ("强麦", "CZCE"),
+    # 中金所
+    "IF": ("沪深300", "CFFEX"), "IC": ("中证500", "CFFEX"), "IM": ("中证1000", "CFFEX"),
+    "IH": ("上证50", "CFFEX"), "T": ("10年期国债", "CFFEX"), "TF": ("5年期国债", "CFFEX"),
+    # 广期所
+    "LC": ("碳酸锂", "GFEX"), "SI": ("工业硅", "GFEX"), "PS": ("多晶硅", "GFEX"),
+    "PT": ("铂", "GFEX"), "PD": ("钯", "GFEX"),
+}
+
+
 def get_products() -> list[dict[str, Any]]:
     try:
         products = api_get("/products", {}, 12 * 3600).get("products") or []
     except Exception:
         products = []
     if not products:
-        # 回退：zhiji 挂/无缓存时读仓库 data/market.json 的产品清单
+        # 回退1：仓库 data/market.json（其 products 用 symbol 键）
         try:
             market = json.loads((ROOT / "data" / "market.json").read_text(encoding="utf-8"))
             products = market.get("products") or []
         except Exception:
             products = []
-    return [item for item in products
-            if isinstance(item, dict) and item.get("product")
-            and str(item.get("product")).upper() not in EXCLUDED_PRODUCTS]
+    if not products:
+        # 回退2：硬编码 76 品种兜底（不依赖任何外部文件）
+        products = [
+            {"product": code, "name": name, "exchange": exch}
+            for code, (name, exch) in FALLBACK_PRODUCTS.items()
+        ]
+    normalized: list[dict[str, Any]] = []
+    for item in products:
+        if not isinstance(item, dict):
+            continue
+        code = str(item.get("product") or item.get("symbol") or "").upper()
+        if code and code not in EXCLUDED_PRODUCTS:
+            row = dict(item)
+            row["product"] = code
+            normalized.append(row)
+    return normalized
 
 
 # ── sina 行情源直连（2026-08-20 起主用，zhiji 配额耗尽；不依赖 akshare）──
