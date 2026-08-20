@@ -26,12 +26,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
-try:  # akshare 行情源（2026-08-20 起主用，zhiji 配额耗尽）
-    import akshare as _akshare
-except Exception:  # pragma: no cover
-    _akshare = None
-
-
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config.local.json"
 CACHE_DIR = ROOT / "cache"
@@ -190,72 +184,107 @@ def get_products() -> list[dict[str, Any]]:
             and str(item.get("product")).upper() not in EXCLUDED_PRODUCTS]
 
 
-# ── akshare/sina 行情源（品种码 → sina 品种名）──────────────────────────
-AKSHARE_SINA_NAMES = {
-    "A": "豆一", "AD": "铸造铝合金期货", "AG": "白银", "AL": "沪铝", "AO": "氧化铝",
-    "AP": "鲜苹果", "AU": "黄金", "B": "豆二", "BC": "国际铜", "BR": "丁二烯橡胶",
-    "BU": "沥青", "BZ": "纯苯", "C": "玉米", "CF": "棉花", "CJ": "红枣",
-    "CS": "玉米淀粉", "CU": "沪铜", "EB": "苯乙烯", "EC": "集运指数(欧线)期货", "EG": "乙二醇",
-    "FG": "玻璃", "FU": "燃油", "HC": "热轧卷板", "I": "铁矿石", "IC": "中证500指数期货",
-    "IF": "沪深300指数期货", "IH": "上证50指数期货", "IM": "中证1000股指期货", "J": "焦炭", "JD": "鸡蛋",
-    "JM": "焦煤", "L": "塑料", "LC": "碳酸锂", "LG": "原木", "LH": "生猪",
-    "LU": "低硫燃料油", "M": "豆粕", "MA": "郑醇", "NI": "沪镍", "NR": "20号胶",
-    "OI": "菜油", "P": "棕榈", "PB": "沪铅", "PD": "钯", "PF": "短纤",
-    "PG": "液化石油气", "PK": "花生", "PL": "丙烯", "PP": "PP", "PR": "瓶级聚酯切片",
-    "PS": "多晶硅", "PT": "铂", "PX": "二甲苯", "RB": "螺纹钢", "RM": "菜粕",
-    "RU": "橡胶", "SA": "纯碱", "SC": "原油", "SF": "硅铁", "SH": "烧碱",
-    "SI": "工业硅", "SM": "锰硅", "SN": "沪锡", "SP": "纸浆", "SR": "白糖",
-    "SS": "不锈钢", "T": "10年期国债期货", "TA": "PTA", "TF": "5年期国债期货",
-    "TL": "晚籼稻", "TS": "强麦", "UR": "尿素", "V": "PVC", "WR": "线材",
-    "Y": "豆油", "ZN": "沪锌",
+# ── sina 行情源直连（2026-08-20 起主用，zhiji 配额耗尽；不依赖 akshare）──
+SINA_NODES = {
+    # 上期所
+    "AU": "hj_qh", "AG": "by_qh", "CU": "tong_qh", "AL": "lv_qh", "ZN": "xing_qh",
+    "SN": "xi_qh", "NI": "ni_qh", "PB": "qian_qh", "RB": "lwg_qh", "HC": "rzjb_qh",
+    "SS": "bxg_qh", "RU": "xj_qh", "BU": "lq_qh", "FU": "ry_qh", "SP": "zj_qh",
+    "NR": "ehj_qh", "AO": "ao_qh", "SC": "yy_qh", "LU": "lu_qh", "BC": "bc_qh",
+    "AD": "ad_qh", "BR": "br_qh", "EC": "ec_qh", "WR": "xc_qh",
+    # 大商所
+    "I": "tks_qh", "J": "jt_qh", "JM": "jm_qh", "V": "pvc_qh", "L": "lldpe_qh",
+    "PP": "jbx_qh", "EG": "yec_qh", "EB": "byx_qh", "M": "dp_qh", "Y": "dy_qh",
+    "A": "dd_qh", "B": "de_qh", "C": "hym_qh", "CS": "ymdf_qh", "PG": "pg_qh",
+    "LH": "lh_qh", "JD": "jd_qh", "RR": "gm_qh", "LG": "lg_qh", "BZ": "bz_qh",
+    "P": "zly_qh",
+    # 郑商所
+    "CF": "mh_qh", "SR": "bst_qh", "TA": "pta_qh", "MA": "zc_qh", "FG": "bl_qh",
+    "SA": "cj_qh", "UR": "ns_qh", "AP": "xpg_qh", "CJ": "hz_qh", "RM": "czp_qh",
+    "OI": "czy_qh", "PF": "pf_qh", "PK": "pk_qh", "SH": "sh_qh", "SF": "gt_qh",
+    "SM": "mg_qh", "PX": "px_qh", "PL": "pl_qh", "PR": "pr_qh", "TL": "wxd_qh",
+    "TS": "qm_qh",
+    # 中金所
+    "IF": "qz_qh", "IC": "zzgz_qh", "IM": "im_qh", "IH": "szgz_qh",
+    "T": "sngz_qh", "TF": "gz_qh",
+    # 广期所
+    "LC": "lc_qh", "SI": "si_qh", "PS": "ps_qh", "PT": "pt_qh", "PD": "pd_qh",
 }
 
 
-def _akshare_quote_fetch(code: str) -> dict[str, Any] | None:
-    name = AKSHARE_SINA_NAMES.get(code.upper())
-    if not name or _akshare is None:
+def _sina_json(url: str, ref: str) -> Any:
+    request = Request(url, headers={"Referer": ref, "User-Agent": "Mozilla/5.0"})
+    with urlopen(request, timeout=15) as response:
+        return json.loads(response.read().decode("utf-8", errors="replace"))
+
+
+def _sina_jsonp(url: str, ref: str) -> Any:
+    request = Request(url, headers={"Referer": ref, "User-Agent": "Mozilla/5.0"})
+    with urlopen(request, timeout=15) as response:
+        text = response.read().decode("utf-8", errors="replace")
+    match = re.search(r"\((\[.*\])\)", text, re.S)
+    if not match:
+        raise DashboardError("新浪返回格式异常")
+    return json.loads(match.group(1))
+
+
+def _sina_quote_fetch(code: str) -> dict[str, Any] | None:
+    node = SINA_NODES.get(code.upper())
+    if not node:
         return None
-    df = _akshare.futures_zh_realtime(symbol=name)
-    if df is None or df.empty:
+    url = (
+        "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+        f"Market_Center.getHQFuturesData?page=1&sort=position&asc=0&node={node}&base=futures"
+    )
+    data = _sina_json(url, ref="https://finance.sina.com.cn/")
+    if not isinstance(data, list) or not data:
         return None
-    sym = df["symbol"].astype(str)
-    main = df[sym.str.endswith("0")].copy()
-    if main.empty:
-        main = df.copy()
-        main = main.sort_values("position", ascending=False).head(1)
-    row = main.iloc[0]
+    rows = [r for r in data if isinstance(r, dict) and str(r.get("symbol", "")).endswith("0")]
+    if not rows:
+        rows = sorted(
+            (r for r in data if isinstance(r, dict)),
+            key=lambda r: float(r.get("position") or 0),
+            reverse=True,
+        )
+    if not rows:
+        return None
+    row = rows[0]
     return {
         "product": code.upper(),
-        "symbol": str(row["symbol"]),
-        "last": finite(row["trade"]),
-        "change_pct": finite(row["changepercent"]),
-        "open_interest": finite(row["position"]),
-        "volume": finite(row["volume"]),
-        "time": f"{row['tradedate']} {row['ticktime']}".strip(),
-        "source": "akshare·sina",
+        "symbol": str(row.get("symbol")),
+        "last": finite(row.get("trade")),
+        "change_pct": finite(row.get("changepercent")),
+        "open_interest": finite(row.get("position")),
+        "volume": finite(row.get("volume")),
+        "time": f"{row.get('tradedate')} {row.get('ticktime')}".strip(),
+        "source": "sina·直连",
     }
 
 
-def _akshare_quote(code: str, ttl: float) -> dict[str, Any] | None:
-    return CACHE.get_or_set(f"akq:{code.upper()}", ttl, lambda: _akshare_quote_fetch(code))
+def _sina_quote(code: str, ttl: float) -> dict[str, Any] | None:
+    return CACHE.get_or_set(f"snq:{code.upper()}", ttl, lambda: _sina_quote_fetch(code))
 
 
-def _akshare_daily(code: str, ttl: float) -> list[dict[str, Any]]:
+def _sina_daily(code: str, ttl: float) -> list[dict[str, Any]]:
     def fetch() -> list[dict[str, Any]]:
-        if _akshare is None:
-            raise DashboardError("akshare 未安装")
-        df = _akshare.futures_main_sina(symbol=f"{code.upper()}0")
+        url = (
+            "https://stock2.finance.sina.com.cn/futures/api/jsonp.php/"
+            f"var%20_=/InnerFuturesNewService.getDailyKLine?symbol={code.upper()}0"
+        )
+        raw = _sina_jsonp(url, ref="https://finance.sina.com.cn/")
         bars: list[dict[str, Any]] = []
-        for item in df.itertuples():
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
             bar = normalize_bar({
-                "time": str(getattr(item, "日期")),
-                "open": getattr(item, "开盘价"),
-                "high": getattr(item, "最高价"),
-                "low": getattr(item, "最低价"),
-                "close": getattr(item, "收盘价"),
-                "volume": getattr(item, "成交量"),
-                "open_interest": getattr(item, "持仓量"),
-                "settle": getattr(item, "动态结算价"),
+                "time": str(item.get("d") or ""),
+                "open": item.get("o"),
+                "high": item.get("h"),
+                "low": item.get("l"),
+                "close": item.get("c"),
+                "volume": item.get("v"),
+                "open_interest": item.get("p"),
+                "settle": item.get("s"),
             })
             if bar:
                 bars.append(bar)
@@ -263,15 +292,15 @@ def _akshare_daily(code: str, ttl: float) -> list[dict[str, Any]]:
         if len(bars) < 30:
             raise DashboardError(f"{code} 主连日线不足（仅 {len(bars)} 根）")
         return bars
-    return CACHE.get_or_set(f"akd:{code.upper()}", ttl, fetch)
+    return CACHE.get_or_set(f"snd:{code.upper()}", ttl, fetch)
 
 
 def get_quote(symbols: str, ttl: float = 8) -> list[dict[str, Any]]:
     codes = sorted({c.strip().upper() for c in symbols.split(",") if c.strip()})
-    if _akshare is not None and codes:
+    if codes:
         found: dict[str, dict[str, Any]] = {}
         with ThreadPoolExecutor(max_workers=10) as pool:
-            for code, quote in pool.map(lambda c: (c, _akshare_quote(c, ttl)), codes):
+            for code, quote in pool.map(lambda c: (c, _sina_quote(c, ttl)), codes):
                 if quote:
                     found[code] = quote
         return list(found.values())
@@ -299,10 +328,10 @@ def normalize_bar(item: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def get_bars(symbol: str, freq: str, limit: int, ttl: float) -> list[dict[str, Any]]:
-    # akshare 主连日/周（2026-08-20 起主用）；盘中周期走新浪分钟线
-    if _akshare is not None and freq in ("D", "W"):
+    # sina 主连日/周（2026-08-20 起主用）；盘中周期走新浪分钟线
+    if freq in ("D", "W"):
         try:
-            daily = _akshare_daily(symbol, ttl)
+            daily = _sina_daily(symbol, ttl)
             if freq == "W":
                 weekly = resample_daily_to_weekly(daily)
                 bars = weekly[-limit:]
@@ -314,7 +343,7 @@ def get_bars(symbol: str, freq: str, limit: int, ttl: float) -> list[dict[str, A
                 raise DashboardError(f"{symbol} D 不足（仅 {len(bars)} 根）")
             return bars
         except Exception:
-            pass  # akshare 失败 → 回落旧逻辑（zhiji 恢复后仍可用）
+            pass  # sina 失败 → 回落旧逻辑（zhiji 恢复后仍可用）
     if freq not in ("D", "W"):
         return get_sina_intraday(symbol, freq, limit, ttl)
     raw = api_get("/kline", {"symbol": symbol, "freq": freq, "cont": 1, "limit": limit}, ttl).get("bars") or []
