@@ -69,6 +69,11 @@ assert (SITE / "auth.js").is_file()
 manifest = json.loads((SITE / "manifest.webmanifest").read_text(encoding="utf-8"))
 assert manifest.get("display") == "standalone"
 assert manifest.get("start_url") == "./#radar"
+# 自我保护：数据新鲜度门禁（全站 fresh ≥80% 才 PASS，防部署 stale 数据）
+_total = int(market.get("fresh") or 0) + int(market.get("stale") or 0)
+if _total > 0:
+    _fr = int(market.get("fresh") or 0) / _total
+    assert _fr >= 0.8, f"数据新鲜度不足: fresh {market.get('fresh')}/{_total} ({_fr:.0%})"
 assert {icon["sizes"] for icon in manifest.get("icons", [])} >= {"192x192", "512x512"}
 assert (SITE / "sw.js").is_file()
 assert "serviceWorker.register('./sw.js')" in (SITE / "app.js").read_text(encoding="utf-8")
