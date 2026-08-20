@@ -222,7 +222,8 @@ def get_products() -> list[dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         code = str(item.get("product") or item.get("symbol") or "").upper()
-        if code and code not in EXCLUDED_PRODUCTS:
+        # 归正到规范 76 品种（FALLBACK_PRODUCTS 为准），防 market.json 被历史构建写成 77
+        if code and code not in EXCLUDED_PRODUCTS and code in FALLBACK_PRODUCTS:
             row = dict(item)
             row["product"] = code
             normalized.append(row)
