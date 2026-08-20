@@ -1,0 +1,31 @@
+name: Macro auto-update
+# 宏观快报·离线自动更新（2026-08-20 建；agent 离线也跑）
+# 由 scripts/update_macro.py 按日历+FRED数据生成/跳过；改了才提交([data-only]→主workflow fast-path部署)
+on:
+  schedule:
+    # 北京 09:00 / 21:00 / 22:00（覆盖美国 8:30am ET 的 CPI/PCE/非农 发布后）
+    - cron: "0 1,13,14 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macro-update
+  cancel-in-progress: true
+
+jobs:
+  macro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run macro auto-update
+        run: python scripts/update_macro.py
+      - name: Commit if changed
+        run: |
+          git config user.name "ff-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/macro.json
+          if git diff --cached --quiet; then echo "no macro change"; exit 0; fi
+          git commit -m "macro: 自动宏观快报 [data-only]"
+          git push
