@@ -3,15 +3,16 @@
 
   // ═══════════════════════════════════════════════════════════════════
   // 渊行站 · 会员登录门禁（2026-08-20）
-  // 登录走后端 Cloudflare Worker：https://auth.abysstrades.xyz/api/login
-  //   （Worker 不可达时回退本地 MEMBERS 字典，保证离线/未部署时仍可用）
-  // 账号由管理员在 Worker 网页管理界面管理（auth-worker/admin.html）。
+  //   · 注册：星球邀请码限定（改 INVITE_CODE）；账号存浏览器 localStorage
+  //   · 登录：优先后端 Worker(若可达) → 本地注册账号 → 管理员预置 MEMBERS
+  //   · 管理员预置账号改 MEMBERS；星球邀请码可随时改 INVITE_CODE
   // ═══════════════════════════════════════════════════════════════════
-  const AUTH_API = 'https://auth.abysstrades.xyz';
-  // 本地回退账号（Worker 不可达时用；管理员仍可直接改这里）
-  const MEMBERS = Object.freeze({
-    'admin': '9c010f134b519e5e17a12ef346bf3ba811a6bc57c422fcfbdba3b491791b972b',  // AbyssYafco2026（请尽快改）
+  const INVITE_CODE = 'ABYSS-YAFCO-2026';  // 星球邀请码（注册必填，管理员可改）
+  const USERS_KEY = 'yafco_users_v1';      // 本地注册用户 {用户名: sha256(密码)}
+  const MEMBERS = Object.freeze({           // 管理员预置账号（后端不可达时兜底）
+    'admin': '9c010f134b519e5e17a12ef346bf3ba811a6bc57c422fcfbdba3b491791b972b',  // AbyssYafco2026（请改）
   });
+  const AUTH_API = 'https://auth.abysstrades.xyz';
   const SESSION_KEY = 'yafco_access_v2';
   const FAILURE_KEY = 'yafco_access_failures_v2';
 
@@ -26,7 +27,7 @@
   function windowState() {
     const p = shanghaiParts();
     const date = `${p.year}-${p.month}-${p.day}`;
-    return { mode: 'gated', slot: `${date}:gated`, title: '渊行 · 会员登录', message: '输入会员账号密码进入。' };
+    return { mode: 'gated', slot: `${date}:gated`, title: '渊行 · 会员登录', message: '登录或注册（星球邀请码）进入。' };
   }
 
   async function digest(value) {
@@ -34,6 +35,11 @@
     const hash = await crypto.subtle.digest('SHA-256', bytes);
     return [...new Uint8Array(hash)].map(byte => byte.toString(16).padStart(2, '0')).join('');
   }
+
+  function getUsers() {
+    try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}'); } catch (_) { return {}; }
+  }
+  function saveUsers(u) { try { localStorage.setItem(USERS_KEY, JSON.stringify(u)); } catch (_) {} }
 
   function failures() {
     try { return JSON.parse(localStorage.getItem(FAILURE_KEY) || '{}'); } catch (_) { return {}; }
@@ -71,24 +77,15 @@
     return current;
   }
 
-  // 后端登录；失败(网络)返回 null → 回退本地
   async function serverLogin(username, password) {
     try {
       const resp = await fetch(`${AUTH_API}/api/login`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-        signal: AbortSignal.timeout(8000),
+        body: JSON.stringify({ username, password }), signal: AbortSignal.timeout(6000),
       });
       const data = await resp.json().catch(() => ({}));
-      if (resp.status === 401) return { ok: false, msg: data.msg || '账号或密码不正确' };
       return data.ok ? { ok: true } : { ok: false, msg: data.msg || '登录失败' };
-    } catch (_) { return null; }  // Worker 不可达
-  }
-
-  function localLogin(username, password) {
-    const expected = MEMBERS[username];
-    if (!expected) return { ok: false, msg: '账号不存在，请联系管理员开通。' };
-    return digest(password).then(h => h === expected ? { ok: true } : { ok: false, msg: '密码不正确（本地回退）。' });
+    } catch (_) { return null; }  // Worker 不可达 → 走本地
   }
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -96,7 +93,22 @@
     const form = document.getElementById('accessForm');
     const input = document.getElementById('accessPassword');
     const userInput = document.getElementById('accessUsername');
+    const inviteInput = document.getElementById('accessInvite');
+    const toggle = document.getElementById('accessToggle');
+    const submit = document.getElementById('accessSubmit');
+    const title = document.getElementById('accessTitle');
+    const message = document.getElementById('accessMessage');
+    let isRegister = false;
     if (!form || !input || !userInput) return;
+
+    function renderMode() {
+      inviteInput.style.display = isRegister ? '' : 'none';
+      submit.textContent = isRegister ? '注册并进入' : '进入渊行';
+      toggle.textContent = isRegister ? '已有账号？登录' : '没有账号？注册';
+      title.textContent = isRegister ? '渊行 · 会员注册' : '渊行 · 会员登录';
+      message.textContent = isRegister ? '星球会员：用邀请码注册。' : '输入会员账号密码登录。';
+    }
+    if (toggle) toggle.addEventListener('click', () => { isRegister = !isRegister; renderMode(); });
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
@@ -110,13 +122,32 @@
       const password = input.value;
       if (!username || !password) return showGate(current, '请输入账号和密码。');
 
-      let result = await serverLogin(username, password);
-      if (result === null) result = await localLogin(username, password);  // Worker 不可达 → 本地回退
-      if (!result.ok) {
+      const users = getUsers();
+      let ok = false, failMsg = '';
+
+      if (isRegister) {
+        if (inviteInput.value.trim() !== INVITE_CODE) return showGate(current, '星球邀请码不正确，注册失败。');
+        if (MEMBERS[username] || users[username]) return showGate(current, '该账号已存在，请直接登录。');
+        users[username] = await digest(password);
+        saveUsers(users);
+        ok = true;
+      } else {
+        const localHash = MEMBERS[username] || users[username];
+        if (localHash) {
+          ok = await digest(password) === localHash;
+          failMsg = '密码不正确。';
+        } else {
+          const srv = await serverLogin(username, password);  // 后端（未部署/被墙时 null）
+          if (srv === null) failMsg = '账号不存在，请先注册。';
+          else { ok = srv.ok; failMsg = srv.msg || '登录失败。'; }
+        }
+      }
+
+      if (!ok) {
         const count = (record.count || 0) + 1;
         const lockUntil = count >= 5 ? now + Math.min(300000, 30000 * (count - 4)) : 0;
         localStorage.setItem(FAILURE_KEY, JSON.stringify({ count, lockUntil }));
-        return showGate(current, (result.msg || '登录失败') + (lockUntil ? `（锁定 ${Math.ceil(lockUntil / 1000)} 秒）` : ''));
+        return showGate(current, failMsg + (lockUntil ? `（锁定 ${Math.ceil(lockUntil / 1000)} 秒）` : ''));
       }
       sessionStorage.setItem(SESSION_KEY, JSON.stringify({ slot: current.slot, at: now }));
       localStorage.removeItem(FAILURE_KEY);
