@@ -26,6 +26,11 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, urlencode, urlparse
 from urllib.request import Request, urlopen
 
+try:  # akshare 行情源（2026-08-20 起主用，zhiji 配额耗尽）
+    import akshare as _akshare
+except Exception:  # pragma: no cover
+    _akshare = None
+
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "config.local.json"
@@ -175,7 +180,91 @@ def get_products() -> list[dict[str, Any]]:
             and str(item.get("product")).upper() not in EXCLUDED_PRODUCTS]
 
 
+# ── akshare/sina 行情源（品种码 → sina 品种名）──────────────────────────
+AKSHARE_SINA_NAMES = {
+    "A": "豆一", "AD": "铸造铝合金期货", "AG": "白银", "AL": "沪铝", "AO": "氧化铝",
+    "AP": "鲜苹果", "AU": "黄金", "B": "豆二", "BC": "国际铜", "BR": "丁二烯橡胶",
+    "BU": "沥青", "BZ": "纯苯", "C": "玉米", "CF": "棉花", "CJ": "红枣",
+    "CS": "玉米淀粉", "CU": "沪铜", "EB": "苯乙烯", "EC": "集运指数(欧线)期货", "EG": "乙二醇",
+    "FG": "玻璃", "FU": "燃油", "HC": "热轧卷板", "I": "铁矿石", "IC": "中证500指数期货",
+    "IF": "沪深300指数期货", "IH": "上证50指数期货", "IM": "中证1000股指期货", "J": "焦炭", "JD": "鸡蛋",
+    "JM": "焦煤", "L": "塑料", "LC": "碳酸锂", "LG": "原木", "LH": "生猪",
+    "LU": "低硫燃料油", "M": "豆粕", "MA": "郑醇", "NI": "沪镍", "NR": "20号胶",
+    "OI": "菜油", "P": "棕榈", "PB": "沪铅", "PD": "钯", "PF": "短纤",
+    "PG": "液化石油气", "PK": "花生", "PL": "丙烯", "PP": "PP", "PR": "瓶级聚酯切片",
+    "PS": "多晶硅", "PT": "铂", "PX": "二甲苯", "RB": "螺纹钢", "RM": "菜粕",
+    "RU": "橡胶", "SA": "纯碱", "SC": "原油", "SF": "硅铁", "SH": "烧碱",
+    "SI": "工业硅", "SM": "锰硅", "SN": "沪锡", "SP": "纸浆", "SR": "白糖",
+    "SS": "不锈钢", "T": "10年期国债期货", "TA": "PTA", "TF": "5年期国债期货",
+    "TL": "晚籼稻", "TS": "强麦", "UR": "尿素", "V": "PVC", "WR": "线材",
+    "Y": "豆油", "ZN": "沪锌",
+}
+
+
+def _akshare_quote_fetch(code: str) -> dict[str, Any] | None:
+    name = AKSHARE_SINA_NAMES.get(code.upper())
+    if not name or _akshare is None:
+        return None
+    df = _akshare.futures_zh_realtime(symbol=name)
+    if df is None or df.empty:
+        return None
+    sym = df["symbol"].astype(str)
+    main = df[sym.str.endswith("0")].copy()
+    if main.empty:
+        main = df.copy()
+        main = main.sort_values("position", ascending=False).head(1)
+    row = main.iloc[0]
+    return {
+        "product": code.upper(),
+        "symbol": str(row["symbol"]),
+        "last": finite(row["trade"]),
+        "change_pct": finite(row["changepercent"]),
+        "open_interest": finite(row["position"]),
+        "volume": finite(row["volume"]),
+        "time": f"{row['tradedate']} {row['ticktime']}".strip(),
+        "source": "akshare·sina",
+    }
+
+
+def _akshare_quote(code: str, ttl: float) -> dict[str, Any] | None:
+    return CACHE.get_or_set(f"akq:{code.upper()}", ttl, lambda: _akshare_quote_fetch(code))
+
+
+def _akshare_daily(code: str, ttl: float) -> list[dict[str, Any]]:
+    def fetch() -> list[dict[str, Any]]:
+        if _akshare is None:
+            raise DashboardError("akshare 未安装")
+        df = _akshare.futures_main_sina(symbol=f"{code.upper()}0")
+        bars: list[dict[str, Any]] = []
+        for item in df.itertuples():
+            bar = normalize_bar({
+                "time": str(getattr(item, "日期")),
+                "open": getattr(item, "开盘价"),
+                "high": getattr(item, "最高价"),
+                "low": getattr(item, "最低价"),
+                "close": getattr(item, "收盘价"),
+                "volume": getattr(item, "成交量"),
+                "open_interest": getattr(item, "持仓量"),
+                "settle": getattr(item, "动态结算价"),
+            })
+            if bar:
+                bars.append(bar)
+        bars.sort(key=lambda b: b["time"])
+        if len(bars) < 30:
+            raise DashboardError(f"{code} 主连日线不足（仅 {len(bars)} 根）")
+        return bars
+    return CACHE.get_or_set(f"akd:{code.upper()}", ttl, fetch)
+
+
 def get_quote(symbols: str, ttl: float = 8) -> list[dict[str, Any]]:
+    codes = sorted({c.strip().upper() for c in symbols.split(",") if c.strip()})
+    if _akshare is not None and codes:
+        found: dict[str, dict[str, Any]] = {}
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            for code, quote in pool.map(lambda c: (c, _akshare_quote(c, ttl)), codes):
+                if quote:
+                    found[code] = quote
+        return list(found.values())
     return api_get("/quote", {"symbols": symbols}, ttl).get("quotes") or []
 
 
@@ -200,11 +289,25 @@ def normalize_bar(item: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def get_bars(symbol: str, freq: str, limit: int, ttl: float) -> list[dict[str, Any]]:
-    raw = api_get(
-        "/kline",
-        {"symbol": symbol, "freq": freq, "cont": 1, "limit": limit},
-        ttl,
-    ).get("bars") or []
+    # akshare 主连日/周（2026-08-20 起主用）；盘中周期走新浪分钟线
+    if _akshare is not None and freq in ("D", "W"):
+        try:
+            daily = _akshare_daily(symbol, ttl)
+            if freq == "W":
+                weekly = resample_daily_to_weekly(daily)
+                bars = weekly[-limit:]
+                if len(bars) < 30:
+                    raise DashboardError(f"{symbol} W 不足（仅 {len(bars)} 根）")
+                return bars
+            bars = daily[-limit:]
+            if len(bars) < 30:
+                raise DashboardError(f"{symbol} D 不足（仅 {len(bars)} 根）")
+            return bars
+        except Exception:
+            pass  # akshare 失败 → 回落旧逻辑（zhiji 恢复后仍可用）
+    if freq not in ("D", "W"):
+        return get_sina_intraday(symbol, freq, limit, ttl)
+    raw = api_get("/kline", {"symbol": symbol, "freq": freq, "cont": 1, "limit": limit}, ttl).get("bars") or []
     bars = [bar for bar in (normalize_bar(item) for item in raw) if bar]
     bars.sort(key=lambda item: item["time"])
     if len(bars) < 30:

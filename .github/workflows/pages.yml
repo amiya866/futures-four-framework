@@ -35,6 +35,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Install akshare
+        run: python -m pip install akshare --quiet
       - name: Validate canonical research registry
         run: python scripts/validate_research_registry.py
       - name: Build 77-product snapshots
