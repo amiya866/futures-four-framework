@@ -243,6 +243,12 @@ def main() -> None:
         "products": ordered,
         "method": "Ari 30% + 缠论 25% + MACD 25% + 江恩 20%；方向看日线与60分钟，15分钟仅作入场确认",
     }
+    # 自我保护：写前备份（防坏数据覆盖后无法回滚）
+    try:
+        if (DATA_DIR / "market.json").exists():
+            (DATA_DIR / "market.json").replace(DATA_DIR / "market.json.bak")
+    except OSError:
+        pass
     atomic_json(DATA_DIR / "market.json", market)
     if not args.skip_fundamentals:
         build_fundamentals(max(1, min(args.workers, 8)))
