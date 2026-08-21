@@ -21,7 +21,7 @@ from build_all import DATA_DIR, atomic_json, materialize_site, security_scan
 
 QUOTE_BATCH_SIZE = 20
 MIN_FRESH_RATIO = 0.90
-DEPLOYED_DATA = "https://wangziquan-del.github.io/futures-four-framework/data"
+DEPLOYED_DATA = "https://amiya866.github.io/futures-four-framework/data"  # 2026-08-22 修：旧域停更导致夜盘水合回退仓库旧分析
 
 
 def read_json(path: Path) -> dict:
