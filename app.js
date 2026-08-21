@@ -94,7 +94,7 @@ s+=`<path d="${path}" fill="none" stroke="${col}" stroke-width="${cur?2.2:1.1}" 
 if(cur){const ld=byYear[yr][byYear[yr].length-1];s+=`<circle cx="${x(+ld[0].slice(5,7),+ld[0].slice(8,10))}" cy="${y(ld[1])}" r="3" fill="${col}"/><text x="${W-PR+6}" y="${y(ld[1])+3}" fill="${col}" font-size="10">${fmt(ld[1])}</text>`}});
 let axis='';['1月','4月','7月','10月'].forEach((lab,i)=>{const xx=x(i*3+1,1);axis+=`<text x="${xx}" y="${H-5}" fill="${cssv('--chart-text','#789198')}" font-size="9">${lab}</text>`});
 return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${axis}${s}</svg><div class="fund-legend">${years.map((yr,i)=>`<span style="color:${i===years.length-1?cssv('--green','#57d6a5'):cols[i%cols.length]}">— ${yr}</span>`).join('')}<em>${unit||''}</em></div>`}
-function renderFundamental(symbol){const card=$('fundamentalCard'),f=state.fundamentals[String(symbol).toUpperCase()];if(!f?.covered){card.classList.add('hidden');return}card.classList.remove('hidden');const link=$('fundamentalLink');
+function renderFundamental(symbol){const card=$('fundamentalCard'),f=state.fundamentals[String(symbol).toUpperCase()];const hasContra=f&&f.contradiction&&f.contradiction!=='库存与月差数据待更新。';if(!f||(!f.covered&&!hasContra)){card.classList.add('hidden');return}card.classList.remove('hidden');const link=$('fundamentalLink');
 $('fundamentalTitle').textContent='供需主要矛盾';$('fundamentalThesis').innerHTML=(f.contradiction||f.summary||'')+(f.marginal_focus?'<div class=mf>短线边际：'+f.marginal_focus+'</div>':'');
 let rows='',series=null,unit='';
 let head=null;
