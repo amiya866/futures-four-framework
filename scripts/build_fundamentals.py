@@ -22,7 +22,7 @@ import engine  # noqa: E402
 OUTPUT = ROOT / "data" / "fundamentals.json"
 CACHE = ROOT / "cache" / "fundamentals"
 API = "https://zhiji-ai.xyz/commodity/api"
-LIBRARY = "https://wangziquan-del.github.io/metals-framework/"
+LIBRARY = "https://amiya866.github.io/metals-framework/"  # 2026-08-20 已迁 amiya866，旧域停更
 
 # metric tuple: id, name, unit, source, why it matters
 # ---- LME COTR(投资基金净多) 直连补充: 7xmetal 汇总页(weekly, T+2) ----
@@ -213,7 +213,7 @@ CHART_PICK = {
 NON_PHYSICAL_SECTORS = {"金融", "其他"}
 NON_PHYSICAL_SYMBOLS = {"ZC"}
 SEARCH_ALIASES = {"AG":"白银","AU":"黄金","PD":"钯","PT":"铂","HC":"热轧板卷","I":"铁矿石","J":"焦炭","JM":"焦煤","RB":"螺纹钢","SF":"硅铁","SM":"锰硅","WR":"线材","BR":"丁二烯橡胶","BU":"沥青","BZ":"纯苯","EB":"苯乙烯","EG":"乙二醇","FG":"玻璃","FU":"燃料油","L":"聚乙烯","LU":"低硫燃料油","MA":"甲醇","PF":"短纤","PG":"液化气","PL":"丙烯","PP":"聚丙烯","PR":"瓶片","PX":"对二甲苯","SA":"纯碱","SC":"原油","SH":"烧碱","TA":"PTA","UR":"尿素","V":"PVC","A":"豆一","AP":"苹果","B":"豆二","C":"玉米","CF":"棉花","CJ":"红枣","CS":"玉米淀粉","JD":"鸡蛋","LG":"原木","LH":"生猪","M":"豆粕","NR":"20号胶","OI":"菜油","P":"棕榈油","PK":"花生","RM":"菜粕","RU":"天然橡胶","SP":"纸浆","SR":"白糖","Y":"豆油"}
-INVENTORY_PREFERRED = {"JD":"ID01362852"}
+INVENTORY_PREFERRED = {"JD":"ID01362852", "AO":"ID01721697"}  # AO: 氧化铝库存·中国(周) Mysteel，搜索打分漏配改硬指
 INVENTORY_CACHE = CACHE / "inventory-map.json"
 
 
