@@ -310,19 +310,33 @@ SINA_NODES = {
 
 
 def _sina_json(url: str, ref: str) -> Any:
-    request = Request(url, headers={"Referer": ref, "User-Agent": "Mozilla/5.0"})
-    with urlopen(request, timeout=15) as response:
-        return json.loads(response.read().decode("utf-8", errors="replace"))
+    last: Exception | None = None
+    for attempt in range(4):  # CI runner 到 sina 偶发 SSL 握手超时，重试退避
+        try:
+            request = Request(url, headers={"Referer": ref, "User-Agent": "Mozilla/5.0"})
+            with urlopen(request, timeout=15) as response:
+                return json.loads(response.read().decode("utf-8", errors="replace"))
+        except (URLError, TimeoutError, json.JSONDecodeError) as error:
+            last = error
+            time.sleep(2 * (attempt + 1))
+    raise last  # type: ignore[misc]
 
 
 def _sina_jsonp(url: str, ref: str) -> Any:
-    request = Request(url, headers={"Referer": ref, "User-Agent": "Mozilla/5.0"})
-    with urlopen(request, timeout=15) as response:
-        text = response.read().decode("utf-8", errors="replace")
-    match = re.search(r"\((\[.*\])\)", text, re.S)
-    if not match:
-        raise DashboardError("新浪返回格式异常")
-    return json.loads(match.group(1))
+    last: Exception | None = None
+    for attempt in range(4):
+        try:
+            request = Request(url, headers={"Referer": ref, "User-Agent": "Mozilla/5.0"})
+            with urlopen(request, timeout=15) as response:
+                text = response.read().decode("utf-8", errors="replace")
+            match = re.search(r"\((\[.*\])\)", text, re.S)
+            if not match:
+                raise DashboardError("新浪返回格式异常")
+            return json.loads(match.group(1))
+        except (URLError, TimeoutError, json.JSONDecodeError) as error:
+            last = error
+            time.sleep(2 * (attempt + 1))
+    raise last  # type: ignore[misc]
 
 
 def _sina_quote_fetch(code: str) -> dict[str, Any] | None:
