@@ -51,8 +51,6 @@ jobs:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/build_all.py --workers 8 --skip-fundamentals
 
-      - name: Refresh live quotes (fallback only, normally unused)
-        if: false
       - name: Materialize site only (data-only fast path)
         if: github.event_name == 'push' && contains(github.event.head_commit.message, '[data-only]')
         run: python -c "import sys; sys.path.insert(0, 'scripts'); from build_all import materialize_site; materialize_site()"
