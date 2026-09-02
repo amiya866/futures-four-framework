@@ -6,7 +6,9 @@ on:
     types: [ff-sync]
   schedule:
     # 2026-08-18 终稿(用户规则: 策略必须和价格同步):
-    # 日盘9:00-15:30北京(01-07UTC)每15分钟 价格+策略一起重算; 夜盘21-23点价格15分钟+21:25策略加刷; 16:30全量
+    # 日盘9:00-15:30北京(01-07UTC)每15分钟 价格+策略一起重算; 16:30全量
+    # 2026-09-02 修复: 夜盘21-23点(13-15UTC)也改为价格+策略同刷——原夜盘仅 refresh_quotes
+    # 纯刷价格,策略从 repo 检出(15:34旧)水合,会把 ff-sync 全量重建的新策略覆盖回旧值(乒乓回退)
     - cron: "*/15 1-7 * * 1-5"
     - cron: "*/15 13-15 * * 1-5"
     - cron: "25 13 * * 1-5"
@@ -43,17 +45,14 @@ jobs:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/build_all.py --workers 8
 
-      - name: Price+Strategy sync rebuild (day session 15min; 21:25 nonferrous)
-        if: github.event_name == 'repository_dispatch' || (github.event_name == 'schedule' && (github.event.schedule == '*/15 1-7 * * 1-5' || github.event.schedule == '25 13 * * 1-5'))
+      - name: Price+Strategy sync rebuild (15min day+night session)
+        if: github.event_name == 'repository_dispatch' || (github.event_name == 'schedule' && (github.event.schedule == '*/15 1-7 * * 1-5' || github.event.schedule == '*/15 13-15 * * 1-5' || github.event.schedule == '25 13 * * 1-5'))
         env:
           ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
         run: python scripts/build_all.py --workers 8 --skip-fundamentals
 
-      - name: Refresh live quotes (night session 15min)
-        if: github.event_name == 'schedule' && github.event.schedule == '*/15 13-15 * * 1-5'
-        env:
-          ZHIJI_GUAN_KEY: ${{ secrets.ZHIJI_GUAN_KEY }}
-        run: python scripts/refresh_quotes.py
+      - name: Refresh live quotes (fallback only, normally unused)
+        if: false
       - name: Materialize site only (data-only fast path)
         if: github.event_name == 'push' && contains(github.event.head_commit.message, '[data-only]')
         run: python -c "import sys; sys.path.insert(0, 'scripts'); from build_all import materialize_site; materialize_site()"
