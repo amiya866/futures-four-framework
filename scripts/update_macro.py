@@ -77,12 +77,24 @@ UST_LOOKBACK = 60        # 前 60 个交易日区间
 UST_MIN_EVENT_AGE_H = 20  # 当前快报发布不足此时长不抢版
 
 
+def _urlopen_retry(req: Request, timeout: int = 25, tries: int = 3) -> str:
+    import time
+    last = None
+    for i in range(tries):
+        try:
+            with urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8")
+        except Exception as e:
+            last = e
+            time.sleep(2 * (i + 1))
+    raise last
+
+
 def fetch_fred(series_id: str) -> list[tuple[str, float]]:
     """返回 [(YYYY-MM, value)]，升序。"""
     url = FRED.format(id=series_id)
     req = Request(url, headers={"User-Agent": "macro-auto/1.0"})
-    with urlopen(req, timeout=20) as r:
-        text = r.read().decode("utf-8")
+    text = _urlopen_retry(req, timeout=45)
     rows: list[tuple[str, float]] = []
     for line in text.strip().splitlines()[1:]:
         if not line or "," not in line:
@@ -206,8 +218,7 @@ def fetch_fred_daily(series_id: str) -> list[tuple[str, float]]:
     """日度序列：返回 [(YYYY-MM-DD, value)]，升序，跳过缺失值。"""
     url = FRED.format(id=series_id)
     req = Request(url, headers={"User-Agent": "macro-auto/1.0"})
-    with urlopen(req, timeout=25) as r:
-        text = r.read().decode("utf-8")
+    text = _urlopen_retry(req, timeout=25)
     rows: list[tuple[str, float]] = []
     for line in text.strip().splitlines()[1:]:
         if not line or "," not in line:
@@ -548,6 +559,103 @@ def today_iso() -> str:
     return datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S+08:00")
 
 
+# ============ FOMC 情景决策树（条件格自动着色） ============
+SCENARIO = {
+    "title": "9月FOMC的情景分析：核心CPI与油价若一同走弱，则9月FOMC可顺理成章的鸽",
+    "cpi_month": "2026-08",      # 核心CPI目标数据月
+    "cpi_label": "今晚的8月CPI",
+    "fomc_rel": "2026-09-15",    # FOMC决议日
+}
+SCENARIO_JSON = ROOT / "data" / "fomc_scenario.json"
+
+# FOMC 决议人工补录（决议后填）：{"2026-09-15": {"hiked": True/False, "dots": "none"/"one_more", "note": "..."}}
+FOMC_DECISIONS: dict = {}
+
+
+def sina_brent() -> tuple[float | None, str]:
+    """新浪布伦特实时价；失败回退 FRED DCOILBRENTEU 日度。"""
+    try:
+        req = Request("https://hq.sinajs.cn/list=hf_OIL",
+                      headers={"Referer": "https://finance.sina.com.cn", "User-Agent": "macro-auto/1.0"})
+        import time
+        raw = None
+        for i in range(3):
+            try:
+                with urlopen(req, timeout=15) as r:
+                    raw = r.read()
+                break
+            except Exception:
+                time.sleep(2 * (i + 1))
+        t = raw.decode("ascii", "ignore")  # 只取首字段数字，避开 GBK 编码
+        v = float(t.split('="', 1)[1].split(",", 1)[0])
+        if v > 0:
+            return v, "新浪·布伦特实时"
+    except Exception:
+        pass
+    try:
+        rows = fetch_fred_daily("DCOILBRENTEU")
+        return rows[-1][1], f"FRED 日度（{rows[-1][0]}）"
+    except Exception:
+        return None, ""
+
+
+def build_scenario() -> None:
+    """每次跑批都刷新情景树（不依赖宏观快报是否更新）。"""
+    # 格1：核心CPI环比
+    c = mom_yoy(cached_series("CPILFESL"), SCENARIO["cpi_month"])
+    cpi_val = None if math.isnan(c["mom"]) else round(c["mom"], 1)
+    if cpi_val is None:
+        cpi_state = None
+    elif cpi_val <= 0.1:
+        cpi_state = 0
+    elif cpi_val <= 0.2:
+        cpi_state = 1
+    else:
+        cpi_state = 2
+    # 格2：布油
+    oil, oil_src = sina_brent()
+    oil_state = None if oil is None else (0 if oil <= 90 else (1 if oil < 100 else 2))
+    # 格3/4：FOMC 决议与点阵图（人工补录）
+    dec = FOMC_DECISIONS.get(SCENARIO["fomc_rel"])
+    fomc_state = None if not dec else (1 if dec.get("hiked") else 0)
+    dots_state = None if not dec else (0 if dec.get("dots") == "none" else 1)
+    # 综合判定
+    if cpi_state == 0 and oil_state == 0:
+        verdict = "鸽派通道打开：核心CPI与油价同弱 → 9月可不加息、点阵图或撤掉年内再加一次"
+    elif cpi_state == 2 or oil_state == 2:
+        verdict = "鹰派路径主导：通胀或油价未走弱 → 9月加息+点阵图保留年内再一次为基准"
+    elif cpi_state is None and oil_state is None:
+        verdict = "条件待定：等核心CPI落地与油价方向"
+    else:
+        verdict = "条件分裂：鸽鹰信号各半，9月决议看当天声明措辞，点阵图倾向保守"
+    doc = {
+        "updated_at": today_iso(),
+        "title": SCENARIO["title"],
+        "verdict": verdict,
+        "decision_note": (dec or {}).get("note", ""),
+        "columns": [
+            {"head": SCENARIO["cpi_label"],
+             "cells": ["核心CPI≤0.1%", "核心CPI≈0.2%", "核心CPI≥0.3%"],
+             "state": cpi_state,
+             "actual": None if cpi_val is None else f"实际 {cpi_val:+.1f}%（{SCENARIO['cpi_month']}）"},
+            {"head": "下周初的油价",
+             "cells": ["布油≤90", "布油≈95", "布油≥100"],
+             "state": oil_state,
+             "actual": None if oil is None else f"布油现价 {oil:.1f}（{oil_src}）"},
+            {"head": "9月FOMC决议",
+             "cells": ["不加息", "加息"],
+             "state": fomc_state,
+             "actual": None if fomc_state is None else ("已落地" if dec else None)},
+            {"head": "9月FOMC点阵图",
+             "cells": ["年内不再加息", "年内再1次加息"],
+             "state": dots_state,
+             "actual": None},
+        ],
+    }
+    SCENARIO_JSON.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(f"[scenario] 已刷新 {SCENARIO_JSON.relative_to(ROOT)} | CPI={cpi_val} 布油={oil} | {verdict[:30]}")
+
+
 def main() -> int:
     force = "--force" in sys.argv
     macro = read_macro()
@@ -562,6 +670,10 @@ def main() -> int:
         ust = check_ust_breakout(macro, today)
         if not ust and not force:
             print("[macro] 无新到期事件，跳过")
+            try:
+                build_scenario()
+            except Exception as e:
+                print(f"[scenario] 失败（不影响主流程）: {e}")
             return 0
         if ust:
             breaks, levels = ust
@@ -574,6 +686,10 @@ def main() -> int:
     MACRO.parent.mkdir(parents=True, exist_ok=True)
     MACRO.write_text(json.dumps(new, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[macro] 已生成 {new['event']['title']} → data/macro.json")
+    try:
+        build_scenario()
+    except Exception as e:
+        print(f"[scenario] 失败（不影响主流程）: {e}")
     return 0
 
 
