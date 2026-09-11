@@ -11,7 +11,14 @@
   CPI=CPIAUCSL / 核心CPI=CPILFESL / PCE=PCEPI / 核心PCE=PCEPILFE
   PPI(最终需求)=PPIFIS / 核心PPI(最终需求除食品能源贸易)=WPSFD49116
   非农=PAYEMS / 失业率=UNRATE
+  美债收益率(日度)=DGS2/DGS5/DGS10/DGS30 / 欧洲央行存款便利利率=ECBDFR
 框架：总量 vs 核心、环比边际、同比趋势 → Fed路径(加息紧迫性/降息门槛) → 金银传导(实际利率)。
+
+外加两类监控：
+  1. 美债 2/5/10/30 年收益率破位（日度）：最新收盘突破前 60 个交易日高/低点 → 生成破位快报。
+     每期限每方向每月只报一次（covered 键 ust:SID:方向:YYYY-MM）；当前快报发布不足 20h 时不抢版。
+  2. 欧洲央行利率决议：决议在 ECB_DECISIONS 有记录才自动生成（FRED 的 ECBDFR 生效日滞后，
+     无法当天判定结果）；无记录则同 FOMC 留给人工。
 """
 from __future__ import annotations
 
@@ -34,6 +41,9 @@ CALENDAR = [
     ("2026-09-10", "ppi", "2026-08", "美国8月PPI"),
     ("2026-09-11", "cpi", "2026-08", "美国8月CPI"),
     ("2026-09-15", "fomc", "2026-09", "9月FOMC"),          # 决策型，需人工核对
+    ("2026-09-10", "ecb", "2026-09", "欧洲央行9月利率决议"),
+    ("2026-10-29", "ecb", "2026-10", "欧洲央行10月利率决议"),
+    ("2026-12-17", "ecb", "2026-12", "欧洲央行12月利率决议"),
     ("2026-09-25", "pce", "2026-08", "美国8月PCE"),
     ("2026-10-02", "nonfarm", "2026-09", "美国9月非农"),
     ("2026-10-12", "ppi", "2026-09", "美国9月PPI"),
@@ -49,6 +59,22 @@ CALENDAR = [
     ("2026-12-09", "ppi", "2026-11", "美国11月PPI"),
     ("2026-12-10", "cpi", "2026-11", "美国11月CPI"),
 ]
+
+
+# 欧洲央行决议记录（决议后人工补录；FRED ECBDFR 生效日滞后，无法当天自动判定）
+ECB_DECISIONS = {
+    "2026-09-10": {
+        "change_bp": 25,
+        "deposit": 2.50, "mro": 2.65, "mlf": 2.90,
+        "effective": "2026-09-16",
+        "note": "年内第二次加息25bp；不预设固定加息路径，逐次会议数据依赖；APP与PEPP到期本金不再再投资；会后市场定价12月存款利率2.80%（声明前2.74%）→年内再加息预期升温。",
+    },
+}
+
+# 美债收益率破位监控（日度，期限: FRED series）
+UST_SERIES = {"2年期": "DGS2", "5年期": "DGS5", "10年期": "DGS10", "30年期": "DGS30"}
+UST_LOOKBACK = 60        # 前 60 个交易日区间
+UST_MIN_EVENT_AGE_H = 20  # 当前快报发布不足此时长不抢版
 
 
 def fetch_fred(series_id: str) -> list[tuple[str, float]]:
@@ -158,19 +184,166 @@ def has_data(kind: str, month: str) -> bool:
 
 def decide_event(macro: dict, today: str) -> tuple | None:
     """已到期、未覆盖（按 kind:month 粒度）、且 FRED 已有数据的事件；多个取发布日最新者。
-    发布超过 10 天的陈旧事件不回补（防止覆盖更新的事件）。"""
+    发布超过 10 天的陈旧事件不回补（防止覆盖更新的事件）。
+    fomc 永远留给人工；ecb 仅在 ECB_DECISIONS 有决议记录时生成。"""
     from datetime import date as _date
     cov = infer_covered(macro)
     due = []
     for rel, kind, month, name in CALENDAR:
         if kind == "fomc" or f"{kind}:{month}" in cov:
             continue
+        if kind == "ecb" and rel not in ECB_DECISIONS:
+            continue
         if rel <= today and (_date.fromisoformat(today) - _date.fromisoformat(rel)).days <= 10:
             due.append((rel, kind, month, name))
     for ev in sorted(due, reverse=True):  # 发布日新的优先，避免回补陈旧事件
-        if has_data(ev[1], ev[2]):
+        if ev[1] == "ecb" or has_data(ev[1], ev[2]):
             return ev
     return None
+
+
+def fetch_fred_daily(series_id: str) -> list[tuple[str, float]]:
+    """日度序列：返回 [(YYYY-MM-DD, value)]，升序，跳过缺失值。"""
+    url = FRED.format(id=series_id)
+    req = Request(url, headers={"User-Agent": "macro-auto/1.0"})
+    with urlopen(req, timeout=25) as r:
+        text = r.read().decode("utf-8")
+    rows: list[tuple[str, float]] = []
+    for line in text.strip().splitlines()[1:]:
+        if not line or "," not in line:
+            continue
+        d, v = line.split(",", 1)
+        try:
+            rows.append((d, float(v)))
+        except ValueError:
+            continue
+    return rows
+
+
+def build_ecb(macro: dict, rel: str, month: str, name: str) -> dict:
+    dec = ECB_DECISIONS[rel]
+    chg = dec["change_bp"]
+    if chg > 0:
+        stance, act = "偏鹰", f"加息{chg}bp"
+    elif chg < 0:
+        stance, act = "偏鸽", f"降息{-chg}bp"
+    else:
+        stance, act = "中性", "维持利率不变"
+    conclusion = (
+        f"（自动化快报·人工补录决议）欧洲央行{name.replace('欧洲央行', '')}：{act}，"
+        f"存款便利利率/主要再融资/边际贷款 → {dec['deposit']:.2f}%/{dec['mro']:.2f}%/{dec['mlf']:.2f}%"
+        f"（{dec['effective']} 起生效）。{dec.get('note', '')}"
+        f"对有色与贵金属：欧央行紧缩→欧元走强压制美元指数，间接利多美元计价金属；"
+        f"但全球同步收紧抬高实际利率，商品估值端承压。声明措辞细节以官方为准。"
+    )
+    return {
+        "updated_at": today_iso(),
+        "event": {
+            "title": f"{name}落地快报（自动）",
+            "released_at": today_iso(),
+            "stance": stance,
+            "conclusion": conclusion,
+            "metrics": [
+                {"name": "决议", "actual": act, "consensus": "—", "previous": "—", "month": month},
+                {"name": "存款便利利率", "actual": f"{dec['deposit']:.2f}%", "consensus": "—", "previous": f"{dec['deposit'] - chg / 100:.2f}%"},
+                {"name": "主要再融资利率", "actual": f"{dec['mro']:.2f}%", "consensus": "—", "previous": f"{dec['mro'] - chg / 100:.2f}%"},
+                {"name": "边际贷款利率", "actual": f"{dec['mlf']:.2f}%", "consensus": "—", "previous": f"{dec['mlf'] - chg / 100:.2f}%"},
+            ],
+            "transmission": [
+                {"asset": "欧央行", "view": stance, "detail": dec.get("note", "")},
+                {"asset": "欧元 / 美元", "view": "欧强美弱", "detail": "欧美利差收窄→欧元走强→美元指数承压。"},
+                {"asset": "美元 / 黄金", "view": "间接受益", "detail": "美元走弱利多金银；但实际利率全球上行是反向压制。"},
+                {"asset": "有色", "view": "汇率端利多", "detail": "美元计价金属获汇率支撑，关注欧美紧缩差。"},
+            ],
+            "next": next_events(rel),
+            "sources": [{"name": "ECB 官网决议声明", "url": "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"}],
+            "verification": "决议结果人工补录进 ECB_DECISIONS；声明措辞/发布会要点需人工精修。",
+        },
+    }
+
+
+def check_ust_breakout(macro: dict, today: str) -> tuple[list, dict] | None:
+    """美债四期限 60 日破位检查。返回 (破位明细, 全部期限水平) 或 None。
+    当前快报发布不足 UST_MIN_EVENT_AGE_H 小时不抢版。"""
+    upd = (macro.get("updated_at") or "")[:19]
+    try:
+        age_h = (datetime.now() - datetime.fromisoformat(upd)).total_seconds() / 3600
+        if age_h < UST_MIN_EVENT_AGE_H:
+            return None
+    except Exception:
+        pass  # 解析失败视为足够旧
+    cov = infer_covered(macro)
+    breaks = []
+    levels = {}
+    for tenor, sid in UST_SERIES.items():
+        try:
+            rows = fetch_fred_daily(sid)
+        except Exception:
+            continue
+        if len(rows) < UST_LOOKBACK + 2:
+            continue
+        latest_d, latest_v = rows[-1]
+        prev_v = rows[-2][1]
+        window = [v for _, v in rows[-(UST_LOOKBACK + 1):-1]]
+        hi, lo = max(window), min(window)
+        levels[tenor] = {"date": latest_d, "value": latest_v, "chg_bp": round((latest_v - prev_v) * 100, 1),
+                         "hi60": hi, "lo60": lo}
+        ym = latest_d[:7]
+        if latest_v > hi and f"ust:{sid}:up:{ym}" not in cov:
+            breaks.append({"tenor": tenor, "sid": sid, "dir": "up", "date": latest_d,
+                           "value": latest_v, "ref": hi, "key": f"ust:{sid}:up:{ym}"})
+        elif latest_v < lo and f"ust:{sid}:down:{ym}" not in cov:
+            breaks.append({"tenor": tenor, "sid": sid, "dir": "down", "date": latest_d,
+                           "value": latest_v, "ref": lo, "key": f"ust:{sid}:down:{ym}"})
+    if not breaks:
+        return None
+    return breaks, levels
+
+
+def build_ust(breaks: list, levels: dict) -> dict:
+    up = any(b["dir"] == "up" for b in breaks)
+    stance = "偏鹰" if up else "偏鸽"
+    seg = "；".join(
+        f"{b['tenor']} {b['value']:.2f}% {'上破' if b['dir'] == 'up' else '下破'}60日{'新高' if b['dir'] == 'up' else '新低'}"
+        f"（前{'高' if b['dir'] == 'up' else '低'} {b['ref']:.2f}%，{b['date']}）"
+        for b in breaks
+    )
+    if up:
+        fed = "收益率破位上行=政策预期/期限溢价重定价偏鹰，高利率维持时间拉长"
+        gold = "通胀预期平稳下名义收益率破位≈实际利率上行→金银承压，美元偏强；若由财政供给/期限溢价驱动，避险盘或部分对冲"
+    else:
+        fed = "收益率破位下行=加息紧迫性消退/降息预期升温"
+        gold = "名义收益率破位下行+美元走弱→实际利率下行，金银完整利多，银弹性更大"
+    conclusion = (
+        f"（自动化快报·FRED日度）美债收益率破位：{seg}。{fed}。"
+        f"对贵金属：{gold}。对有色：利率端压力通过美元与贴现率传导，关注实际利率净方向。"
+    )
+    metrics = []
+    for tenor in UST_SERIES:
+        lv = levels.get(tenor)
+        if lv:
+            metrics.append({"name": f"美债{tenor}", "actual": f"{lv['value']:.2f}%",
+                            "consensus": f"60日区间 {lv['lo60']:.2f}-{lv['hi60']:.2f}%",
+                            "previous": f"日变动 {lv['chg_bp']:+.1f}bp"})
+    return {
+        "updated_at": today_iso(),
+        "event": {
+            "title": "美债收益率破位快报（自动）",
+            "released_at": today_iso(),
+            "stance": stance,
+            "conclusion": conclusion,
+            "metrics": metrics,
+            "transmission": [
+                {"asset": "美联储", "view": stance, "detail": fed},
+                {"asset": "美债", "view": "破位", "detail": seg},
+                {"asset": "美元 / 黄金", "view": stance, "detail": gold},
+                {"asset": "有色", "view": "跟随", "detail": "美元与风险偏好联动，实际利率净方向定强弱。"},
+            ],
+            "next": next_events(date.today().isoformat()),
+            "sources": [{"name": "FRED (DGS2/DGS5/DGS10/DGS30)", "url": "https://fred.stlouisfed.org/series/DGS10"}],
+            "verification": "FRED 日度官方数据，破位=最新收盘突破前60个交易日高/低点；每期限每方向每月只报一次。",
+        },
+    }
 
 
 def stance_from(cpi_core_yoy: float) -> str:
@@ -365,7 +538,7 @@ def next_events(rel: str) -> list[dict]:
     out = []
     for r, kind, month, name in CALENDAR:
         if r > rel:
-            out.append({"time": r, "event": name + ("（自动）" if kind != "fomc" else "（需人工核对）"), "watch": ""})
+            out.append({"time": r, "event": name + ("（需人工核对）" if kind in ("fomc", "ecb") else "（自动）"), "watch": ""})
         if len(out) >= 4:
             break
     return out
@@ -380,13 +553,24 @@ def main() -> int:
     macro = read_macro()
     today = date.today().isoformat()
     ev = decide_event(macro, today)
-    if not ev and not force:
-        print("[macro] 无新到期事件，跳过")
-        return 0
-    rel, kind, month, name = ev if ev else ("2026-08-28", "pce", "2026-07", "测试PCE")
-    builders = {"cpi": build_cpi, "pce": build_pce, "ppi": build_ppi, "nonfarm": build_nonfarm}
-    new = builders[kind](macro, rel, month, name)
-    new["covered"] = sorted(infer_covered(macro) | {f"{kind}:{month}"})
+    if ev:
+        rel, kind, month, name = ev
+        builders = {"cpi": build_cpi, "pce": build_pce, "ppi": build_ppi, "nonfarm": build_nonfarm, "ecb": build_ecb}
+        new = builders[kind](macro, rel, month, name)
+        new["covered"] = sorted(infer_covered(macro) | {f"{kind}:{month}"})
+    else:
+        ust = check_ust_breakout(macro, today)
+        if not ust and not force:
+            print("[macro] 无新到期事件，跳过")
+            return 0
+        if ust:
+            breaks, levels = ust
+            new = build_ust(breaks, levels)
+            new["covered"] = sorted(infer_covered(macro) | {b["key"] for b in breaks})
+        else:
+            rel, kind, month, name = ("2026-08-28", "pce", "2026-07", "测试PCE")
+            new = build_pce(macro, rel, month, name)
+            new["covered"] = sorted(infer_covered(macro) | {f"{kind}:{month}"})
     MACRO.parent.mkdir(parents=True, exist_ok=True)
     MACRO.write_text(json.dumps(new, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[macro] 已生成 {new['event']['title']} → data/macro.json")
