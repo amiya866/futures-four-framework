@@ -33,14 +33,8 @@
       <span>YAFCO / ACCESS CONTROL</span>
       <h1 id="accessTitle">校验航行权限</h1>
       <p id="accessMessage">正在读取北京时间访问窗口……</p>
-      <form id="accessForm" class="hidden" autocomplete="off">
-        <input id="accessUsername" type="text" placeholder="账号" maxlength="24" autocomplete="username" required>
-        <input id="accessPassword" type="password" placeholder="密码" maxlength="32" autocomplete="current-password" required>
-        <input id="accessInvite" type="text" placeholder="星球邀请码（注册时必填）" maxlength="24" autocomplete="off" style="display:none">
-        <button type="submit" id="accessSubmit">进入渊行</button>
-        <button type="button" id="accessToggle" class="link-btn">没有账号？注册</button>
-      </form>
-      <small id="accessSchedule">渊行 · 星球会员制：注册需邀请码，账号本地保存</small>
+      <form id="accessForm" class="hidden" autocomplete="off"><input id="accessPassword" type="password" placeholder="输入当前时段密码" maxlength="32" required><button type="submit">进入渊行</button></form>
+      <small id="accessSchedule">00:00–07:59 维护 · 08:00–08:59 开放 · 09:00–15:59 / 16:00–23:59 分时鉴权</small>
     </div>
   </section>
   <section class="cover" id="cover">
@@ -132,7 +126,7 @@
     </section>
 
     <section class="method section" id="method"><div class="section-kicker"><span>03</span><b>WEEKLY SCAN · 每周信息扫描</b></div><div class="section-title"><div><h2>近一周市场信息与小作文</h2><p>来自目录树数据源网站与公开检索的每周精选；点击卡片看原文。</p></div><div class="build-state" id="newsTime">—</div></div><div class="news-grid" id="newsGrid"></div><div class="provenance"><p>数据由知几「观」API 提供，GitHub Actions 构建为静态快照。密钥只存在于仓库 Secret，不进入浏览器或发布文件。</p><p>当前接口没有交易所会员席位排名：网站明确留空，绝不生成模拟席位。程序化技术分析属于概率信号，不构成投资建议。</p></div></section>
-    <section class="macro section" id="macro"><div class="section-kicker"><span>04</span><b>LATEST MACRO RELEASE</b></div><div class="section-title"><div><h2>宏观落地快报</h2><p>只保留当前最新、最重要的一条数据或新闻。</p></div><div class="build-state" id="macroTime">—</div></div><article class="macro-card dark-panel"><header><div><span id="macroStance">—</span><h3 id="macroTitle">载入中</h3></div><small id="macroVerify">—</small></header><p id="macroConclusion">—</p><div class="macro-metrics" id="macroMetrics"></div><div class="macro-grid"><section><h4>资产传导</h4><div id="macroTransmission"></div></section><section><h4>下一验证节点</h4><div id="macroNext"></div></section></div><footer id="macroSources"></footer></article></section>
+    <section class="macro section" id="macro"><div class="section-kicker"><span>04</span><b>LATEST MACRO RELEASE</b></div><div class="section-title"><div><h2>宏观落地快报</h2><p>只保留当前最新、最重要的一条数据或新闻。</p></div><div class="build-state" id="macroTime">—</div></div><article class="macro-card dark-panel"><header><div><span id="macroStance">—</span><h3 id="macroTitle">载入中</h3></div><small id="macroVerify">—</small></header><p id="macroConclusion">—</p><div class="macro-metrics" id="macroMetrics"></div><div class="macro-grid"><section><h4>资产传导</h4><div id="macroTransmission"></div></section><section><h4>下一验证节点</h4><div id="macroNext"></div></section></div><footer id="macroSources"></footer></article><div class="fomc-tree" id="fomcTree"></div></section>
   </main>
   <footer><a class="identity" href="#cover"><i>Y</i><span>渊行 / ABYSSAL NAVIGATION</span></a><p>越过价格表面，向结构深处航行。</p><span id="footerUpdated">—</span></footer>
   <div class="loading-screen" id="loadingScreen"><div class="sonar"><i></i></div><span>建立全市场数据链路</span></div>
