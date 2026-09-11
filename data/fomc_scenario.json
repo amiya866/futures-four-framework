@@ -1,0 +1,46 @@
+{
+ "updated_at": "2026-09-11T14:40:03+08:00",
+ "title": "9月FOMC的情景分析：核心CPI与油价若一同走弱，则9月FOMC可顺理成章的鸽",
+ "verdict": "鹰派路径主导：通胀或油价未走弱 → 9月加息+点阵图保留年内再一次为基准",
+ "decision_note": "",
+ "columns": [
+  {
+   "head": "今晚的8月CPI",
+   "cells": [
+    "核心CPI≤0.1%",
+    "核心CPI≈0.2%",
+    "核心CPI≥0.3%"
+   ],
+   "state": null,
+   "actual": null
+  },
+  {
+   "head": "下周初的油价",
+   "cells": [
+    "布油≤90",
+    "布油≈95",
+    "布油≥100"
+   ],
+   "state": 2,
+   "actual": "布油现价 105.8（新浪·布伦特实时）"
+  },
+  {
+   "head": "9月FOMC决议",
+   "cells": [
+    "不加息",
+    "加息"
+   ],
+   "state": null,
+   "actual": null
+  },
+  {
+   "head": "9月FOMC点阵图",
+   "cells": [
+    "年内不再加息",
+    "年内再1次加息"
+   ],
+   "state": null,
+   "actual": null
+  }
+ ]
+}
