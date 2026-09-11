@@ -1,51 +1,57 @@
 {
- "updated_at": "2026-09-04T01:03:52+08:00",
+ "updated_at": "2026-09-11T09:19:30+08:00",
  "event": {
-  "title": "美国8月非农落地快报（自动）",
-  "released_at": "2026-09-04T01:03:52+08:00",
-  "stance": "中性",
-  "conclusion": "（自动化快报·FRED实际值）2026-08 非农新增—万人（前值—万）、失业率—%。就业有韧性→政策谨慎。对贵金属：就业走弱+实际利率预期下行偏多金，银弹性大；留意月底PCE二次确认。",
+  "title": "美国8月PPI落地快报（自动）",
+  "released_at": "2026-09-11T09:19:30+08:00",
+  "stance": "中性偏鹰",
+  "conclusion": "（自动化快报·FRED实际值）2026-08 PPI(最终需求)环比+0.40%、同比+5.41%；核心PPI环比+0.27%、同比+4.66%。PPI同比高位、生产端通胀压力未消→加息/高利率维持时间拉长，政策偏鹰。对贵金属：生产端通胀高企→名义利率易上难下，若实际利率跟随上行则金银短线承压；但若市场解读为滞胀（通胀高+就业弱），黄金偏多、银弱腿；对有色：生产端通胀高企压制估值，但也印证上游成本支撑。",
   "metrics": [
    {
-    "name": "非农新增(万)",
-    "actual": "—",
-    "consensus": "—",
-    "previous": "—",
+    "name": "PPI 环比",
+    "actual": "+0.40%",
+    "consensus": "—（自动化无共识）",
+    "previous": "前月",
     "month": "2026-08"
    },
    {
-    "name": "失业率",
-    "actual": "—",
+    "name": "PPI 同比",
+    "actual": "+5.41%",
+    "consensus": "—",
+    "previous": "前年同月"
+   },
+   {
+    "name": "核心PPI 环比",
+    "actual": "+0.27%",
     "consensus": "—",
     "previous": "前月"
    },
    {
-    "name": "非农YoY趋势",
-    "actual": "—",
+    "name": "核心PPI 同比",
+    "actual": "+4.66%",
     "consensus": "—",
-    "previous": "自动"
+    "previous": "前年同月"
    }
   ],
   "transmission": [
    {
     "asset": "美联储",
-    "view": "中性",
-    "detail": "就业有韧性→政策谨慎"
+    "view": "中性偏鹰",
+    "detail": "PPI同比高位、生产端通胀压力未消→加息/高利率维持时间拉长，政策偏鹰"
    },
    {
     "asset": "美债",
-    "view": "就业弱利多长端",
-    "detail": "就业降温→加息概率降→长端收益率或回落。"
+    "view": "名义收益率易上难下",
+    "detail": "PPI是CPI领先指标，生产端通胀高企支撑长端收益率。"
    },
    {
     "asset": "美元 / 黄金",
-    "view": "偏多黄金",
-    "detail": "实际利率预期下行+美元走弱→黄金利多，银弹性大。"
+    "view": "中性偏鹰",
+    "detail": "生产端通胀高企→名义利率易上难下，若实际利率跟随上行则金银短线承压；但若市场解读为滞胀（通胀高+就业弱），黄金偏多、银弱腿"
    },
    {
     "asset": "有色",
-    "view": "跟随",
-    "detail": "宏观情绪主导。"
+    "view": "双向",
+    "detail": "通胀高企压制估值 vs 上游成本支撑价格，看美元与实际利率净方向。"
    }
   ],
   "next": [
@@ -72,10 +78,14 @@
   ],
   "sources": [
    {
-    "name": "FRED (PAYEMS/UNRATE)",
-    "url": "https://fred.stlouisfed.org/series/PAYEMS"
+    "name": "FRED (PPIFIS/WPSFD49116)",
+    "url": "https://fred.stlouisfed.org/series/PPIFIS"
    }
   ],
-  "verification": "数据来自 FRED 官方，自动化生成（无共识对比）；如需人工精修可覆盖。"
- }
+  "verification": "数据来自 FRED 官方，自动化生成（无共识对比，环比对比前值）；如需人工精修可覆盖。"
+ },
+ "covered": [
+  "nonfarm:2026-08",
+  "ppi:2026-08"
+ ]
 }
