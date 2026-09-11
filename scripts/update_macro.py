@@ -9,6 +9,7 @@
 
 数据源：FRED CSV（免 key）：
   CPI=CPIAUCSL / 核心CPI=CPILFESL / PCE=PCEPI / 核心PCE=PCEPILFE
+  PPI(最终需求)=PPIFIS / 核心PPI(最终需求除食品能源贸易)=WPSFD49116
   非农=PAYEMS / 失业率=UNRATE
 框架：总量 vs 核心、环比边际、同比趋势 → Fed路径(加息紧迫性/降息门槛) → 金银传导(实际利率)。
 """
@@ -30,18 +31,22 @@ FRED = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={id}"
 CALENDAR = [
     ("2026-08-28", "pce", "2026-07", "美国7月PCE"),
     ("2026-09-04", "nonfarm", "2026-08", "美国8月非农"),
+    ("2026-09-10", "ppi", "2026-08", "美国8月PPI"),
     ("2026-09-11", "cpi", "2026-08", "美国8月CPI"),
     ("2026-09-15", "fomc", "2026-09", "9月FOMC"),          # 决策型，需人工核对
     ("2026-09-25", "pce", "2026-08", "美国8月PCE"),
     ("2026-10-02", "nonfarm", "2026-09", "美国9月非农"),
+    ("2026-10-12", "ppi", "2026-09", "美国9月PPI"),
     ("2026-10-13", "cpi", "2026-09", "美国9月CPI"),
     ("2026-10-27", "fomc", "2026-10", "10月FOMC"),
     ("2026-10-30", "pce", "2026-09", "美国9月PCE"),
     ("2026-11-06", "nonfarm", "2026-10", "美国10月非农"),
+    ("2026-11-10", "ppi", "2026-10", "美国10月PPI"),
     ("2026-11-12", "cpi", "2026-10", "美国10月CPI"),
-    ("2026-11-25", "pce", "2026-10", "美国10月PCE"),
+    ("2026-11-25", "pce", "2026-11", "美国11月PPI"),
     ("2026-12-04", "nonfarm", "2026-11", "美国11月非农"),
     ("2026-12-08", "fomc", "2026-12", "12月FOMC"),
+    ("2026-12-09", "ppi", "2026-11", "美国11月PPI"),
     ("2026-12-10", "cpi", "2026-11", "美国11月CPI"),
 ]
 
@@ -61,7 +66,7 @@ def fetch_fred(series_id: str) -> list[tuple[str, float]]:
             val = float(v)
         except ValueError:
             continue
-        rows.append((d, val))
+        rows.append((d[:7], val))  # 归一化到 YYYY-MM，与日历 data_month 对齐
     return rows
 
 
@@ -116,16 +121,55 @@ def coverage_key(macro: dict) -> str:
     return ""
 
 
-def decide_event(macro: dict, today: str) -> tuple | None:
-    """返回 CALENDAR 里第一个已到期且未覆盖的事件（fomc 跳过留给人工）。"""
-    covered = coverage_key(macro)
+def infer_covered(macro: dict) -> set:
+    """已覆盖事件集合（"kind:month"）：macro.json 的 covered 列表 + 当前 event 标题推断。"""
+    cov = set(macro.get("covered") or [])
+    t = (macro.get("event") or {}).get("title") or ""
     for rel, kind, month, name in CALENDAR:
-        if rel <= today:
-            if kind == "fomc":
-                continue  # 决策型，留给 agent/人工
-            if covered and month <= covered:
-                continue
-            return rel, kind, month, name
+        if name and name in t:
+            cov.add(f"{kind}:{month}")
+    return cov
+
+
+_SERIES_CACHE: dict = {}
+
+
+def cached_series(series_id: str) -> list:
+    if series_id not in _SERIES_CACHE:
+        _SERIES_CACHE[series_id] = get_series(series_id)
+    return _SERIES_CACHE[series_id]
+
+
+def has_data(kind: str, month: str) -> bool:
+    """FRED 是否已有该事件目标月数据（没到点的发布会生成空值，挡住）。"""
+    try:
+        if kind == "cpi":
+            return not math.isnan(mom_yoy(cached_series("CPIAUCSL"), month)["value"])
+        if kind == "pce":
+            return not math.isnan(mom_yoy(cached_series("PCEPI"), month)["value"])
+        if kind == "ppi":
+            return not math.isnan(mom_yoy(cached_series("PPIFIS"), month)["value"])
+        if kind == "nonfarm":
+            return month in {d for d, v in cached_series("PAYEMS")}
+    except Exception:
+        return False
+    return False
+
+
+def decide_event(macro: dict, today: str) -> tuple | None:
+    """已到期、未覆盖（按 kind:month 粒度）、且 FRED 已有数据的事件；多个取发布日最新者。
+    发布超过 10 天的陈旧事件不回补（防止覆盖更新的事件）。"""
+    from datetime import date as _date
+    cov = infer_covered(macro)
+    due = []
+    for rel, kind, month, name in CALENDAR:
+        if kind == "fomc" or f"{kind}:{month}" in cov:
+            continue
+        if rel <= today and (_date.fromisoformat(today) - _date.fromisoformat(rel)).days <= 10:
+            due.append((rel, kind, month, name))
+    for ev in sorted(due, reverse=True):  # 发布日新的优先，避免回补陈旧事件
+        if has_data(ev[1], ev[2]):
+            return ev
     return None
 
 
@@ -259,6 +303,54 @@ def build_nonfarm(macro: dict, rel: str, month: str, name: str) -> dict:
     }
 
 
+def build_ppi(macro: dict, rel: str, month: str, name: str) -> dict:
+    hd = cached_series("PPIFIS")        # 最终需求 PPI（官方口径）
+    core = cached_series("WPSFD49116")  # 核心：最终需求除食品/能源/贸易
+    h = mom_yoy(hd, month)
+    c = mom_yoy(core, month)
+    stance = stance_from(c["yoy"])
+    fed = (
+        "PPI同比高位、生产端通胀压力未消→加息/高利率维持时间拉长，政策偏鹰"
+        if (h["yoy"] and h["yoy"] >= 4)
+        else "PPI温和→加息紧迫性下降，政策相机抉择"
+    )
+    gold = (
+        "生产端通胀高企→名义利率易上难下，若实际利率跟随上行则金银短线承压；"
+        "但若市场解读为滞胀（通胀高+就业弱），黄金偏多、银弱腿"
+        if stance == "中性偏鹰"
+        else "实际利率若随名义收益率下行+美元走弱则利多金银"
+    )
+    conclusion = (
+        f"（自动化快报·FRED实际值）{month} PPI(最终需求)环比{pct(h['mom'])}、同比{pct(h['yoy'])}；"
+        f"核心PPI环比{pct(c['mom'])}、同比{pct(c['yoy'])}。{fed}。"
+        f"对贵金属：{gold}；对有色：生产端通胀高企压制估值，但也印证上游成本支撑。"
+    )
+    return {
+        "updated_at": today_iso(),
+        "event": {
+            "title": f"{name}落地快报（自动）",
+            "released_at": today_iso(),
+            "stance": stance,
+            "conclusion": conclusion,
+            "metrics": [
+                {"name": "PPI 环比", "actual": pct(h["mom"]), "consensus": "—（自动化无共识）", "previous": "前月", "month": month},
+                {"name": "PPI 同比", "actual": pct(h["yoy"]), "consensus": "—", "previous": "前年同月"},
+                {"name": "核心PPI 环比", "actual": pct(c["mom"]), "consensus": "—", "previous": "前月"},
+                {"name": "核心PPI 同比", "actual": pct(c["yoy"]), "consensus": "—", "previous": "前年同月"},
+            ],
+            "transmission": [
+                {"asset": "美联储", "view": stance, "detail": fed},
+                {"asset": "美债", "view": "名义收益率易上难下", "detail": "PPI是CPI领先指标，生产端通胀高企支撑长端收益率。"},
+                {"asset": "美元 / 黄金", "view": stance, "detail": gold},
+                {"asset": "有色", "view": "双向", "detail": "通胀高企压制估值 vs 上游成本支撑价格，看美元与实际利率净方向。"},
+            ],
+            "next": next_events(rel),
+            "sources": [{"name": "FRED (PPIFIS/WPSFD49116)", "url": "https://fred.stlouisfed.org/series/PPIFIS"}],
+            "verification": "数据来自 FRED 官方，自动化生成（无共识对比，环比对比前值）；如需人工精修可覆盖。",
+        },
+    }
+
+
 def prev_of(rows, month):
     idx = {d: v for d, v in rows}
     return idx.get(prev_month(month), math.nan)
@@ -292,8 +384,9 @@ def main() -> int:
         print("[macro] 无新到期事件，跳过")
         return 0
     rel, kind, month, name = ev if ev else ("2026-08-28", "pce", "2026-07", "测试PCE")
-    builders = {"cpi": build_cpi, "pce": build_pce, "nonfarm": build_nonfarm}
+    builders = {"cpi": build_cpi, "pce": build_pce, "ppi": build_ppi, "nonfarm": build_nonfarm}
     new = builders[kind](macro, rel, month, name)
+    new["covered"] = sorted(infer_covered(macro) | {f"{kind}:{month}"})
     MACRO.parent.mkdir(parents=True, exist_ok=True)
     MACRO.write_text(json.dumps(new, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"[macro] 已生成 {new['event']['title']} → data/macro.json")
