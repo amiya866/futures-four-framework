@@ -93,7 +93,7 @@ const fmtPct = v => (v > 0 ? '+' : '') + (+v).toFixed(2) + '%';
 const clsPct = v => v > 0 ? 'up' : (v < 0 ? 'down' : '');
 const fmtWan = v => (v / 10000).toLocaleString('zh-CN', {maximumFractionDigits: 2}) + ' 万';
 
-fetch('./data/basis_live.json').then(r => r.json()).then(d => {
+fetch('./data/basis_live.json?t=' + Date.now()).then(r => r.json()).then(d => {
   const acc = d.account, pairs = d.pairs || {}, params = d.params || {};
   $('updatedAt').textContent = '数据更新：' + (d.updated || '--');
 
