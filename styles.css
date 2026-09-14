@@ -38,6 +38,7 @@ main{position:relative;background:radial-gradient(circle at 50% 0,#0b2027 0,#061
 
 /* 每周信息扫描（2026-08-13） */
 .news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-top:18px}
+.research-filters{margin:14px 2px 0}
 .news-card{display:block;padding:16px 18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--text);text-decoration:none;transition:.18s}
 .news-card:hover{border-color:var(--cyan2);transform:translateY(-2px)}
 .news-card header{display:flex;gap:8px;align-items:center;font-size:9px;color:var(--muted)}

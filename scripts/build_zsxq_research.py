@@ -24,7 +24,14 @@ def main() -> None:
         panel = Path(sys.argv[sys.argv.index("--panel") + 1])
     d = json.loads(panel.read_text(encoding="utf-8"))
     items = (d.get("categories") or {}).get("研报纪要") or []
-    items = sorted(items, key=lambda x: x.get("date", ""), reverse=True)[:KEEP]
+    seen, dedup = set(), []
+    for x in sorted(items, key=lambda x: x.get("date", ""), reverse=True):
+        key = x.get("url") or (x.get("date", "") + (x.get("title") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append(x)
+    items = dedup[:KEEP]
     out_items = []
     for x in items:
         pts = [p for p in (x.get("points") or []) if p and not p.startswith("#")]
