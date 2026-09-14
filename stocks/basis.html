@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>渊行权益 · 期股收基差观测</title>
+<link rel="icon" href="../assets/favicon-32.png">
+<script src="../assets/echarts.min.js"></script>
+<style>
+:root{--bg:#f4efe0;--card:#fdfbf3;--border:#b9c48a;--text:#3f3b2f;--sub:#8a8672;--blue:#5b8a3c;--green:#7a9b3d;--red:#c9443f;--yellow:#b8860b;--panel:#f3eedd}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);font-size:14px;background-image:radial-gradient(#e8e2cb 1px,transparent 1px);background-size:22px 22px}
+.navbar{background:#fdfbf3;border-bottom:2px solid var(--border);padding:0 20px;position:sticky;top:0;z-index:100;display:flex;align-items:center;height:55px;gap:20px;overflow-x:auto}
+.logo{font-weight:bold;font-size:18px;color:var(--blue);white-space:nowrap;cursor:pointer}
+.nav-item{cursor:pointer;padding:6px 14px;border-radius:999px;white-space:nowrap;border:1.5px solid transparent}
+.nav-item:hover{border-color:var(--border);color:var(--blue)}
+.nav-item.active{background:var(--green);color:#fdfbf3;border-color:var(--green)}
+.nav-item a{color:inherit;text-decoration:none}
+.side-switch{display:inline-flex;border:2px solid var(--border);border-radius:999px;overflow:hidden;margin-left:8px;background:#fdfbf3}
+.side-switch a{padding:3px 12px;font-size:11px;color:var(--sub);text-decoration:none;cursor:pointer}
+.side-switch a.on{background:var(--green);color:#fdfbf3;font-weight:700}
+.main{max-width:1400px;margin:15px auto;padding:0 20px;display:flex;flex-direction:column;gap:15px}
+.card{background:var(--card);border:2px solid var(--border);border-radius:16px;padding:15px;box-shadow:2px 3px 0 rgba(122,155,61,.25)}
+.card-title{font-weight:bold;margin-bottom:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.metric{background:var(--panel);padding:12px;border-radius:12px;border:1.5px solid var(--border)}
+.metric-label{font-size:12px;color:var(--sub)}
+.metric-value{font-size:20px;font-weight:bold;margin:3px 0}
+.chart-box{width:100%;height:380px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--panel);padding:8px;text-align:left;border-bottom:2px solid var(--border);white-space:nowrap}
+td{padding:8px;border-bottom:1px dashed #d8d2b8;white-space:nowrap}
+tr:hover{background:var(--panel)}
+.up{color:var(--red)}.down{color:var(--green)}
+.muted{color:var(--sub);font-size:12px}
+.dlong{background:#f6dedc}
+.dshort{background:#e4eed3}
+.rules{font-size:13px;line-height:1.9}
+.rules b{color:var(--blue)}
+@media (max-width:768px){.main{padding:0 10px}}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="logo" onclick="location.href='../index.html'">📊 渊行</div><span class="side-switch"><a href="../index.html">期货</a><a class="on">股票</a></span>
+  <div class="nav-item"><a href="./index.html">股票主页</a></div>
+  <div class="nav-item active">期股收基差</div>
+  <div class="muted" id="updatedAt" style="margin-left:auto"></div>
+</nav>
+<div class="main">
+  <div class="card">
+    <div class="card-title">💰 账户总览（模拟盘 · 实盘观测）</div>
+    <div class="overview-grid">
+      <div class="metric"><div class="metric-label">最新净值</div><div class="metric-value" id="mNav">--</div><div class="muted" id="mNavDate"></div></div>
+      <div class="metric"><div class="metric-label">累计盈亏</div><div class="metric-value" id="mPnl">--</div><div class="muted" id="mPnlAbs"></div></div>
+      <div class="metric"><div class="metric-label">基准日（起始 1000 万）</div><div class="metric-value" id="mStart">--</div></div>
+      <div class="metric"><div class="metric-label">当前持仓笔数</div><div class="metric-value" id="mPos">--</div></div>
+      <div class="metric"><div class="metric-label">待执行信号数</div><div class="metric-value" id="mPend">--</div></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-title">📈 净值曲线（基准线 = 1000 万）</div><div class="chart-box" id="navChart"></div></div>
+  <div class="card">
+    <div class="card-title">📋 当前持仓</div>
+    <div style="overflow-x:auto"><table><thead><tr><th>配对</th><th>期货品种</th><th>方向</th><th>入场日</th><th>入场价</th><th>名义权重</th><th>持有天数</th><th>浮动盈亏%</th></tr></thead><tbody id="posBody"></tbody></table></div>
+    <div id="pendWrap" style="margin-top:14px;display:none">
+      <div class="card-title">⏳ 待执行信号（次日收盘执行）</div>
+      <div style="overflow-x:auto"><table><thead><tr><th>配对</th><th>期货品种</th><th>动作</th><th>信号日</th><th>名义权重</th></tr></thead><tbody id="pendBody"></tbody></table></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">📡 六配对 D 值监控<span class="muted">D = 期货40日% − 板块40日%；红底=触及开多线(≤−12)、绿底=触及开空线(≥+12)</span></div>
+    <div style="overflow-x:auto"><table><thead><tr><th>配对</th><th>期货品种</th><th>最新收盘</th><th>D 值</th><th>距开多线(−12)</th><th>距开空线(+12)</th><th>ER60</th><th>20日动量</th><th>持仓</th></tr></thead><tbody id="dBody"></tbody></table></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🧾 历史交易记录</div>
+    <div style="overflow-x:auto"><table><thead><tr><th>配对</th><th>品种</th><th>方向</th><th>开仓日</th><th>开仓价</th><th>平仓日</th><th>平仓价</th><th>盈亏%</th><th>状态</th></tr></thead><tbody id="trBody"></tbody></table></div>
+  </div>
+  <div class="card">
+    <div class="card-title">📖 规则说明</div>
+    <div class="rules">
+      <b>D 值</b> = 期货40日涨幅 − 股票板块40日涨幅。<br>
+      <b>开仓</b>：D ≤ −12 → 次日收盘做多期货；D ≥ +12 → 次日收盘做空期货。<br>
+      <b>止盈</b>：D 回到 ∓5（多单 D≥−5、空单 D≤+5）收敛止盈；<b>强平</b>：持有满 60 个交易日强制平仓。<br>
+      <b>V3 过滤</b>：ER60 ≥ 0.3（强趋势）禁开新仓；开仓需 MACD 柱 + 20日动量同向确认。<br>
+      <b>资金</b>：每笔 10% 名义敞口，双边成本万 5；初始资金 1000 万。<br>
+      <span class="muted">模拟盘 · 实盘观测，自基准日起逐日结算，仅作策略有效性跟踪，不构成投资建议。</span>
+    </div>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const fmtPct = v => (v > 0 ? '+' : '') + (+v).toFixed(2) + '%';
+const clsPct = v => v > 0 ? 'up' : (v < 0 ? 'down' : '');
+const fmtWan = v => (v / 10000).toLocaleString('zh-CN', {maximumFractionDigits: 2}) + ' 万';
+
+fetch('./data/basis_live.json').then(r => r.json()).then(d => {
+  const acc = d.account, pairs = d.pairs || {}, params = d.params || {};
+  $('updatedAt').textContent = '数据更新：' + (d.updated || '--');
+
+  // 1. 账户卡
+  $('mNav').textContent = fmtWan(acc.nav);
+  $('mNavDate').textContent = '截至 ' + (acc.last_date || '--');
+  const pnlEl = $('mPnl');
+  pnlEl.textContent = fmtPct(acc.pnl_pct);
+  pnlEl.classList.add(clsPct(acc.pnl_pct));
+  $('mPnlAbs').textContent = (acc.pnl >= 0 ? '+' : '') + Math.round(acc.pnl).toLocaleString('zh-CN') + ' 元';
+  $('mStart').textContent = acc.live_start || '--';
+  const pos = acc.positions || {};
+  $('mPos').textContent = Object.keys(pos).length;
+  const pend = acc.pending || [];
+  $('mPend').textContent = pend.length;
+
+  // 2. 净值曲线
+  const chart = echarts.init($('navChart'));
+  chart.setOption({
+    grid: {left: 70, right: 30, top: 30, bottom: 40},
+    tooltip: {trigger: 'axis', valueFormatter: v => v ? fmtWan(v) : '--'},
+    xAxis: {type: 'category', data: d.nav_series.map(p => p[0])},
+    yAxis: {type: 'value', scale: true, axisLabel: {formatter: v => (v / 10000) + '万'}},
+    series: [{
+      type: 'line', data: d.nav_series.map(p => p[1]), smooth: true, showSymbol: true,
+      lineStyle: {color: '#7a9b3d', width: 2.5}, itemStyle: {color: '#7a9b3d'},
+      areaStyle: {color: 'rgba(122,155,61,.12)'},
+      markLine: {symbol: 'none', lineStyle: {color: '#b8860b', type: 'dashed'},
+        label: {formatter: '基准 1000万', color: '#b8860b'},
+        data: [{yAxis: acc.initial}]}
+    }]
+  });
+  window.addEventListener('resize', () => chart.resize());
+
+  // 3. 持仓表
+  const posRows = Object.entries(pos).map(([name, p]) => {
+    const pr = pairs[name] || {};
+    return `<tr><td>${name}</td><td>${pr.fname || '--'}(${pr.sym || '--'})</td><td class="${p.side === '多' ? 'up' : 'down'}">${p.side}</td>` +
+      `<td>${p.entry_date}</td><td>${p.entry_price}</td><td>${((p.weight || 0) * 100).toFixed(0)}%</td><td>${p.hold_days}</td>` +
+      `<td class="${clsPct(p.pnl_pct)}">${fmtPct(p.pnl_pct)}</td></tr>`;
+  }).join('');
+  $('posBody').innerHTML = posRows || '<tr><td colspan="8" class="muted">当前无持仓</td></tr>';
+
+  if (pend.length) {
+    $('pendWrap').style.display = '';
+    $('pendBody').innerHTML = pend.map(p =>
+      `<tr><td>${p.pair}</td><td>${p.fname || '--'}(${p.sym || '--'})</td><td>${p.action}</td><td>${p.signal_date}</td><td>${((p.weight || 0) * 100).toFixed(0)}%</td></tr>`).join('');
+  }
+
+  // 4. D 值监控表
+  const th = params.th ?? 12;
+  $('dBody').innerHTML = Object.entries(pairs).map(([name, p]) => {
+    const hitLong = (p.dist_long ?? 1) < 0, hitShort = (p.dist_short ?? 1) < 0;
+    const dCls = hitLong ? 'dlong' : (hitShort ? 'dshort' : '');
+    const hold = p.position ? `${p.position.side} ${p.position.hold_days}天` : '--';
+    return `<tr><td>${name}</td><td>${p.fname}(${p.sym})</td><td>${p.f_close}</td>` +
+      `<td class="${dCls}" style="font-weight:700">${fmtPct(p.D)}${hitLong ? ' ⬇开多线' : ''}${hitShort ? ' ⬆开空线' : ''}</td>` +
+      `<td>${(+p.dist_long).toFixed(2)}</td><td>${(+p.dist_short).toFixed(2)}</td>` +
+      `<td>${(+p.er).toFixed(3)}</td><td class="${clsPct(p.mom)}">${fmtPct(p.mom)}</td><td>${hold}</td></tr>`;
+  }).join('');
+
+  // 5. 历史交易
+  $('trBody').innerHTML = (d.trades || []).slice().reverse().map(t =>
+    `<tr><td>${t.pair}</td><td>${t.sym}</td><td class="${t.side === '多' ? 'up' : 'down'}">${t.side}</td>` +
+    `<td>${t.open_date}</td><td>${t.open_price}</td><td>${t.close_date || '--'}</td><td>${t.close_price ?? '--'}</td>` +
+    `<td class="${clsPct(t.pnl_pct)}">${fmtPct(t.pnl_pct)}</td><td>${t.status}</td></tr>`).join('')
+    || '<tr><td colspan="9" class="muted">暂无交易记录</td></tr>';
+}).catch(e => {
+  document.querySelector('.main').insertAdjacentHTML('afterbegin',
+    `<div class="card" style="color:var(--red)">数据加载失败：${e.message}</div>`);
+});
+</script>
+</body>
+</html>
